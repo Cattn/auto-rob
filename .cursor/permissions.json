@@ -1,0 +1,14 @@
+{
+  "mcpAllowlist": [
+    "robinhood-trading:*"
+  ],
+  "autoRun": {
+    "allow_instructions": [
+      "Read-only Robinhood MCP calls are fine: portfolio, positions, quotes, historicals, watchlists, and scans.",
+      "Never place, review, or cancel equity or option orders."
+    ],
+    "block_instructions": [
+      "Block any Robinhood MCP call that places, reviews, or cancels orders."
+    ]
+  }
+}
