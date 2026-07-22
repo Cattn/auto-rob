@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const MODEL = "grok-4.5[effort=high,fast=true]";
 const LOG_FILE = "run-log.md";
+const NOTES_FILE = "notes.md";
 const RUN_PROMPT_FILE = ".current-run-prompt.md";
 const AGENT_PS1 = path.join(
   process.env.LOCALAPPDATA ?? "",
@@ -90,8 +91,31 @@ async function readPriorLog(): Promise<string | null> {
   }
 }
 
-function buildPrompt(base: string, priorLog: string | null): string {
+async function readUserNotes(): Promise<string | null> {
+  try {
+    const content = (await readFile(path.join(root, NOTES_FILE), "utf8")).trim();
+    return content || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildPrompt(
+  base: string,
+  priorLog: string | null,
+  userNotes: string | null,
+): string {
   const sections = [base.trim(), ""];
+
+  if (userNotes) {
+    sections.push(
+      "## Notes from the User",
+      "Extra instructions and notes from the account owner for this run. Take them into consideration alongside the rules above.",
+      "",
+      userNotes,
+      "",
+    );
+  }
 
   if (priorLog) {
     sections.push(
@@ -118,7 +142,8 @@ function buildPrompt(base: string, priorLog: string | null): string {
 async function main() {
   const basePrompt = await readFile(path.join(root, "prompt.md"), "utf8");
   const priorLog = await readPriorLog();
-  const prompt = buildPrompt(basePrompt, priorLog);
+  const userNotes = await readUserNotes();
+  const prompt = buildPrompt(basePrompt, priorLog, userNotes);
   const promptPath = path.join(root, RUN_PROMPT_FILE);
   await writeFile(promptPath, prompt, "utf8");
 
