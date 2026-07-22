@@ -1,7 +1,3 @@
-//todo: setup automations to automatically generate reports of the portfolio, & suggest changes.
-
-// https://cursor.com/docs/cli/headless#real-time-progress-tracking
-
 import { spawn } from "node:child_process";
 import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -93,7 +89,9 @@ async function readPriorLog(): Promise<string | null> {
 
 async function readUserNotes(): Promise<string | null> {
   try {
-    const content = (await readFile(path.join(root, NOTES_FILE), "utf8")).trim();
+    const content = (
+      await readFile(path.join(root, NOTES_FILE), "utf8")
+    ).trim();
     return content || null;
   } catch {
     return null;
