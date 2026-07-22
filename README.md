@@ -5,12 +5,11 @@ Unattended Robinhood portfolio agent. Runs on a schedule during market hours, re
 ## Prerequisites
 
 - Node.js 20+
-- [Cursor CLI](https://cursor.com/docs/cli/installation) (`cursor-agent` / `agent`)
+- [Cursor CLI](https://cursor.com/docs/cli/installation) (`agent` / `cursor-agent` on `PATH`, or the default install path)
+- Optional: `CURSOR_AGENT_PATH` if the CLI is not on `PATH`
 - A Robinhood account with [Agentic Trading](https://robinhood.com/us/en/support/articles/agentic-trading-overview/) enabled
 - The Robinhood Trading MCP connected in Cursor: `https://agent.robinhood.com/mcp/trading`
 - Optional: a self-hosted [ntfy](https://docs.ntfy.sh/install/) instance for push notifications
-
-The runner resolves the Cursor agent CLI cross-platform (`agent` / `cursor-agent` on `PATH`, or the default install under `%LOCALAPPDATA%\cursor-agent` on Windows and `~/.local/bin` on Linux/macOS). Override with `CURSOR_AGENT_PATH` if needed. Project permissions live in `.cursor/cli.json` (CLI) and `.cursor/permissions.json` (IDE): Robinhood MCP, WebFetch for research, `npm`/`npx` for notify, and writes only to `run-log.md`, `long-term.md`, and `.notify-brief.md`.
 
 ## Setup
 
@@ -33,18 +32,14 @@ Self-host ntfy with the official install guide: [docs.ntfy.sh/install](https://d
 
 Optional files you can edit:
 
-
-| File           | Purpose                                   |
-| -------------- | ----------------------------------------- |
-| `prompt.md`    | Standing rules for the agent              |
-| `notes.md`     | Extra guidance injected each run          |
-| `long-term.md` | Durable goals/watches (agent-maintained)  |
-| `run-log.md`   | Per-run continuity log (agent-maintained) |
-
-
-
-
-## Run
+| File | Purpose |
+| --- | --- |
+| `prompt.md` | Standing rules for the agent |
+| `notes.md` | Extra guidance injected each run |
+| `long-term.md` | Durable goals/watches (agent-maintained) |
+| `run-log.md` | Per-run continuity log (agent-maintained) |
+| `.cursor/cli.json` | CLI allowlist (MCP, WebFetch, notify shell, log writes) |
+| `.cursor/permissions.json` | IDE allowlist for the same tools |## Run
 
 ```bash
 npm start
