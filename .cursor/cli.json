@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Mcp(robinhood-trading:*)",
+      "Shell(npm)",
+      "Shell(npx)",
+      "Read(**)",
+      "Write(run-log.md)",
+      "Write(long-term.md)",
+      "Write(.notify-brief.md)",
+      "WebFetch(*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env*)",
+      "Write(.env)",
+      "Write(.env*)",
+      "Shell(rm)",
+      "Shell(del)",
+      "Shell(git)"
+    ]
+  }
+}

@@ -1,6 +1,8 @@
 node_modules/
 .env
-.cursor/
+.cursor/*
+!.cursor/cli.json
+!.cursor/permissions.json
 .current-run-prompt.md
 run-log.md
 long-term.md

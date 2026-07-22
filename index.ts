@@ -235,7 +235,6 @@ async function main() {
       "-File",
       AGENT_PS1,
       "-p",
-      "--force",
       "--approve-mcps",
       "--trust",
       "--sandbox",

@@ -10,7 +10,7 @@ Unattended Robinhood portfolio agent. Runs on a schedule during market hours, re
 - The Robinhood Trading MCP connected in Cursor: `https://agent.robinhood.com/mcp/trading`
 - Optional: a self-hosted [ntfy](https://docs.ntfy.sh/install/) instance for push notifications
 
-The runner currently launches the Windows Cursor agent (`%LOCALAPPDATA%\cursor-agent\cursor-agent.ps1`).
+The runner currently launches the Windows Cursor agent (`%LOCALAPPDATA%\cursor-agent\cursor-agent.ps1`). Project permissions live in `.cursor/cli.json` (CLI) and `.cursor/permissions.json` (IDE): Robinhood MCP, WebFetch for research, `npm`/`npx` for notify, and writes only to `run-log.md`, `long-term.md`, and `.notify-brief.md`.
 
 ## Setup
 

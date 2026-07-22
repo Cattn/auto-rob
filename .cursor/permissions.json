@@ -1,0 +1,23 @@
+{
+  "mcpAllowlist": [
+    "robinhood-trading:*"
+  ],
+  "terminalAllowlist": [
+    "npm",
+    "npm run notify",
+    "npx"
+  ],
+  "autoRun": {
+    "allow_instructions": [
+      "Allow all robinhood-trading MCP tools for this autonomous portfolio agent, including placing, reviewing, and canceling equity and option orders when the agent has decided to act.",
+      "Allow shell only for npm/npx notify helpers (npm run notify).",
+      "Allow writing run-log.md, long-term.md, and .notify-brief.md in the project root.",
+      "Allow WebFetch for market research (news, filings, pre-market context)."
+    ],
+    "block_instructions": [
+      "Block shell commands other than npm/npx used to send the phone brief.",
+      "Block reading or writing .env files.",
+      "Block edits to source files (*.ts, package.json, prompt.md, notes.md) unless the user explicitly asks in notes.md."
+    ]
+  }
+}
