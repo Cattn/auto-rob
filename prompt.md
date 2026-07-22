@@ -55,5 +55,6 @@ Suggested shape per item:
 - Goal / watch / todo (one line)
 - Size: small | medium | large
 - Rationale (1–2 short sentences)
+- Check-after date when useful (e.g. earnings date, catalyst, or “revisit after YYYY-MM-DD”) — so later agents know when action or re-evaluation is actually due
 
 Create `long-term.md` if missing and you have something worth recording. If nothing qualifies, leave the file unchanged (or create an empty stub only if it does not exist and you have nothing to add — prefer leaving it absent until the first real entry).
