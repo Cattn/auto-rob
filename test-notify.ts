@@ -1,13 +1,13 @@
-import { loadEnvFile, notify } from "./index.ts";
+import { loadEnvFile, notify } from "./notify.js";
 
 const message =
   process.argv.slice(2).join(" ").trim() ||
-  `auto-rob test · ${new Date().toLocaleString()}`;
+  `auto-rob test - ${new Date().toLocaleString()}`;
 
 await loadEnvFile();
 
 const ok = await notify(message, {
-  title: "auto-rob · test",
+  title: "auto-rob - test",
   tags: ["white_check_mark"],
   priority: 5,
 });
