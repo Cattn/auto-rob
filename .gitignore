@@ -1,3 +1,5 @@
 node_modules/
 .env
 .cursor/
+.current-run-prompt.md
+run-log.md
