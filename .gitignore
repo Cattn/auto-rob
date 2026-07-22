@@ -1,4 +1,9 @@
 node_modules/
+ui/node_modules/
+ui/out/
+ui/.vite/
+ui/build/
+ui/.svelte-kit/
 .env
 .cursor/*
 !.cursor/cli.json
