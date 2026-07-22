@@ -20,16 +20,15 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` only if you want push notifications (all `NTFY_*` vars are optional — leave them blank or omit them and runs continue normally with no notifications):
+Edit `.env` if you want push notifications (`NTFY_*` is optional — leave blank to skip):
 
 ```
-# Optional — push notifications
 NTFY_URL=https://ntfy.example.com
 NTFY_TOPIC=auto-rob
 NTFY_TOKEN=your-token
 ```
 
-To enable ntfy, self-host with the official install guide: [docs.ntfy.sh/install](https://docs.ntfy.sh/install/). Create a topic, generate a token if you use auth, then point `NTFY_URL` / `NTFY_TOPIC` / `NTFY_TOKEN` at your instance. Subscribe to that topic in the ntfy app.
+Self-host guide: [docs.ntfy.sh/install](https://docs.ntfy.sh/install/). Create a topic, add a token if you use auth, then subscribe in the ntfy app.
 
 Optional files you can edit:
 
@@ -40,7 +39,9 @@ Optional files you can edit:
 | `long-term.md` | Durable goals/watches (agent-maintained) |
 | `run-log.md` | Per-run continuity log (agent-maintained) |
 | `.cursor/cli.json` | CLI allowlist (MCP, WebFetch, notify shell, log writes) |
-| `.cursor/permissions.json` | IDE allowlist for the same tools |## Run
+| `.cursor/permissions.json` | IDE allowlist for the same tools |
+
+## Run
 
 ```bash
 npm start
@@ -69,17 +70,15 @@ Aim for roughly every 2 hours during US market hours (Mon–Fri). Avoid firing e
 1. Open Task Scheduler → Create Task.
 2. General: run whether user is logged on or not; configure for your Windows version.
 3. Triggers → New:
-  - Weekly, Monday–Friday
-  - Start: `9:30 AM`
-  - Repeat every: `2 hours`
-  - Duration: `6 hours` (fires 9:30, 11:30, 1:30, 3:30)
+   - Weekly, Monday–Friday
+   - Start: `9:30 AM`
+   - Repeat every: `2 hours`
+   - Duration: `6 hours` (fires 9:30, 11:30, 1:30, 3:30)
 4. Optional second trigger for a late run (e.g. `5:00 PM`, no repeat) so you get a pre-close pass without hitting 5:30.
 5. Actions → Start a program:
-  - Program: `npm` (or full path to `npm.cmd`)
-  - Arguments: `start`
-  - Start in: path to this repo
-
-
+   - Program: `npm` (or full path to `npm.cmd`)
+   - Arguments: `start`
+   - Start in: path to this repo
 
 ### Linux (cron)
 
