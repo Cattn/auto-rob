@@ -3,3 +3,6 @@ node_modules/
 .cursor/
 .current-run-prompt.md
 run-log.md
+long-term.md
+.ntfy-setup/
+ntfy-login.txt
