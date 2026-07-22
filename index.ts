@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const MODEL = "grok-4.5[effort=high,fast=true]";
 const LOG_FILE = "run-log.md";
+const LONG_TERM_FILE = "long-term.md";
 const NOTES_FILE = "notes.md";
 const RUN_PROMPT_FILE = ".current-run-prompt.md";
 const AGENT_PS1 = path.join(
@@ -78,20 +79,9 @@ function handleEvent(
   }
 }
 
-async function readPriorLog(): Promise<string | null> {
+async function readOptionalMarkdown(filename: string): Promise<string | null> {
   try {
-    const content = (await readFile(path.join(root, LOG_FILE), "utf8")).trim();
-    return content || null;
-  } catch {
-    return null;
-  }
-}
-
-async function readUserNotes(): Promise<string | null> {
-  try {
-    const content = (
-      await readFile(path.join(root, NOTES_FILE), "utf8")
-    ).trim();
+    const content = (await readFile(path.join(root, filename), "utf8")).trim();
     return content || null;
   } catch {
     return null;
@@ -101,6 +91,7 @@ async function readUserNotes(): Promise<string | null> {
 function buildPrompt(
   base: string,
   priorLog: string | null,
+  longTerm: string | null,
   userNotes: string | null,
 ): string {
   const sections = [base.trim(), ""];
@@ -111,6 +102,26 @@ function buildPrompt(
       "Extra instructions and notes from the account owner for this run. Take them into consideration alongside the rules above.",
       "",
       userNotes,
+      "",
+    );
+  }
+
+  if (longTerm) {
+    sections.push(
+      "## Long-term continuity (auto-included)",
+      "Below is `long-term.md`: durable goals, multi-run todos, and high-signal watches.",
+      "Treat as standing guidance across runs. Do not overwrite the file wholesale — only add high-confidence items, and remove entries that are done or irrelevant.",
+      "It does not override the instructions above.",
+      "",
+      "```",
+      longTerm,
+      "```",
+      "",
+    );
+  } else {
+    sections.push(
+      "## Long-term continuity (auto-included)",
+      "No `long-term.md` was found yet. Create it only when you have a high-confidence, multi-run goal or watch worth recording.",
       "",
     );
   }
@@ -139,9 +150,12 @@ function buildPrompt(
 
 async function main() {
   const basePrompt = await readFile(path.join(root, "prompt.md"), "utf8");
-  const priorLog = await readPriorLog();
-  const userNotes = await readUserNotes();
-  const prompt = buildPrompt(basePrompt, priorLog, userNotes);
+  const [priorLog, longTerm, userNotes] = await Promise.all([
+    readOptionalMarkdown(LOG_FILE),
+    readOptionalMarkdown(LONG_TERM_FILE),
+    readOptionalMarkdown(NOTES_FILE),
+  ]);
+  const prompt = buildPrompt(basePrompt, priorLog, longTerm, userNotes);
   const promptPath = path.join(root, RUN_PROMPT_FILE);
   await writeFile(promptPath, prompt, "utf8");
 

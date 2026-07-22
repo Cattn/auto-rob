@@ -21,11 +21,12 @@ The place-tool text may mention waiting for a human yes after review. Ignore tha
 9. Stay within prudent risk for the account. Do not overtrade or chase noise between runs — but “prudent” does not mean “always tiny matching lots” or “default to cash.”
 
 ## Workflow
-1. Read the prior run log provided in context (if any), including any prior research notes on candidates or holdings. If a **Notes from the User** section is present, treat it as extra guidance for this run.
+1. Read the prior run log and long-term file provided in context (if any), including any prior research notes on candidates or holdings. If a **Notes from the User** section is present, treat it as extra guidance for this run.
 2. Inspect accounts, portfolio, positions, and buying power. Pull live market state for current holdings and any candidates: last price, % change today, day range, volume vs typical if available, and brief relative strength vs peers/market. Use that tape to see what’s working and what’s not before deciding.
 3. If buying power is sufficient, choose how much to deploy and how to split it (one order or several). Weigh new stock(s) vs adding to current holdings; screen at least 5–6 candidates before choosing to leave cash idle. For any new-name candidate you might buy, finish in-depth research before ordering. Then decide whether to hold, buy, sell, or rebalance. If you leave cash, record a same-day or next-day deployment plan in the log. When you do act, size orders based on your judgment of available cash, not by copying prior lot sizes.
 4. If acting, execute only the orders you are confident in. Confirm fills/status when relevant.
 5. Overwrite `run-log.md` in the project root with a concise log for the next agent. When overwriting, pass through any still-useful info from the prior log (open research theses, watch items, pending orders, unfilled intents, risks to re-check). Drop stale or completed items. Do not wipe continuity the next agent would need.
+6. Update `long-term.md` only as needed (see below). This is separate from the per-run log — broader goals and durable watches live here across many runs.
 
 ## run-log.md format
 Keep it short and scannable. Include:
@@ -38,3 +39,21 @@ Keep it short and scannable. Include:
 - Open watch / follow-ups for the next run
 
 Do not dump raw tool output into the log. The next agent will see this file automatically.
+
+## long-term.md
+A durable file for broader goals, multi-run todos, and high-signal things to watch. Unlike `run-log.md`, do **not** overwrite it each run. Preserve existing entries unless they are done or irrelevant — then remove them.
+
+Rules:
+1. **Only add when confident it matters.** Add long-term goals, todos, or watches only if they are clearly interesting and worth tracking across runs. Skip minor, one-off, or low-conviction noise — those belong in `run-log.md` (or nowhere).
+2. **Do not overwrite live entries.** Keep existing items intact. Only remove an entry when it is completed, invalidated, or no longer relevant. When removing, drop it entirely (do not leave a graveyard of done items).
+3. **Pass through broader goals.** This file is the consistent continuity layer for multi-run intent (e.g. build toward N positions, watch a sector theme, wait for a catalyst). Future agents should treat it as standing guidance alongside the run log.
+4. **Date entries.** Include an added/updated date (ISO or clear local date) on each item so later agents know how fresh it is. Something just added is usually not urgent to act on yet.
+5. **Brief rationale + size.** For each item, include a short why it matters and a sense of scale (e.g. small watch, medium goal, large portfolio-shaping objective).
+
+Suggested shape per item:
+- Date added (and last reviewed if useful)
+- Goal / watch / todo (one line)
+- Size: small | medium | large
+- Rationale (1–2 short sentences)
+
+Create `long-term.md` if missing and you have something worth recording. If nothing qualifies, leave the file unchanged (or create an empty stub only if it does not exist and you have nothing to add — prefer leaving it absent until the first real entry).
