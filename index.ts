@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
 import { access, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import spawn from "cross-spawn";
 import {
   BRIEF_FILE,
   loadEnvFile,
@@ -9,6 +9,7 @@ import {
   sendBriefFile,
   SENT_MARKER,
 } from "./notify.js";
+import { resolveAgentCommand } from "./resolve-agent.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const MODEL = "grok-4.5[effort=high,fast=true]";
@@ -16,11 +17,6 @@ const LOG_FILE = "run-log.md";
 const LONG_TERM_FILE = "long-term.md";
 const NOTES_FILE = "notes.md";
 const RUN_PROMPT_FILE = ".current-run-prompt.md";
-const AGENT_PS1 = path.join(
-  process.env.LOCALAPPDATA ?? "",
-  "cursor-agent",
-  "cursor-agent.ps1",
-);
 
 const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
 const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
@@ -224,16 +220,12 @@ async function main() {
     "Begin the portfolio run now.",
   ].join(" ");
 
-  await access(AGENT_PS1);
+  const agent = await resolveAgentCommand();
+  console.log(dim(`agent: ${agent}`));
 
   const child = spawn(
-    "powershell.exe",
+    agent,
     [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      AGENT_PS1,
       "-p",
       "--approve-mcps",
       "--trust",
@@ -273,6 +265,9 @@ async function main() {
     }
   };
 
+  if (!child.stdout || !child.stderr) {
+    throw new Error("Failed to capture agent stdout/stderr");
+  }
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", consume);

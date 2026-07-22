@@ -10,7 +10,7 @@ Unattended Robinhood portfolio agent. Runs on a schedule during market hours, re
 - The Robinhood Trading MCP connected in Cursor: `https://agent.robinhood.com/mcp/trading`
 - Optional: a self-hosted [ntfy](https://docs.ntfy.sh/install/) instance for push notifications
 
-The runner currently launches the Windows Cursor agent (`%LOCALAPPDATA%\cursor-agent\cursor-agent.ps1`). Project permissions live in `.cursor/cli.json` (CLI) and `.cursor/permissions.json` (IDE): Robinhood MCP, WebFetch for research, `npm`/`npx` for notify, and writes only to `run-log.md`, `long-term.md`, and `.notify-brief.md`.
+The runner resolves the Cursor agent CLI cross-platform (`agent` / `cursor-agent` on `PATH`, or the default install under `%LOCALAPPDATA%\cursor-agent` on Windows and `~/.local/bin` on Linux/macOS). Override with `CURSOR_AGENT_PATH` if needed. Project permissions live in `.cursor/cli.json` (CLI) and `.cursor/permissions.json` (IDE): Robinhood MCP, WebFetch for research, `npm`/`npx` for notify, and writes only to `run-log.md`, `long-term.md`, and `.notify-brief.md`.
 
 ## Setup
 
@@ -48,6 +48,12 @@ Optional files you can edit:
 
 ```bash
 npm start
+```
+
+Check that the Cursor agent CLI resolves (no full run):
+
+```bash
+npm run agent:check
 ```
 
 Test notifications:
