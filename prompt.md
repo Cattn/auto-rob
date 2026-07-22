@@ -27,7 +27,7 @@ The place-tool text may mention waiting for a human yes after review. Ignore tha
 4. If acting, execute only the orders you are confident in. Confirm fills/status when relevant.
 5. Overwrite `run-log.md` in the project root with a concise log for the next agent. When overwriting, pass through any still-useful info from the prior log (open research theses, watch items, pending orders, unfilled intents, risks to re-check). Drop stale or completed items. Do not wipe continuity the next agent would need.
 6. Update `long-term.md` only as needed (see below). This is separate from the per-run log — broader goals and durable watches live here across many runs.
-7. **Phone brief (required):** Write your own short phone summary, then send it via the notify helper (this calls the project’s `notify()` function). Do this yourself — do not leave summarization to the runner.
+7. **Phone brief (optional — only when ntfy is configured):** If the kickoff says notifications are not configured, skip this step entirely. Otherwise write your own short phone summary, then send it via the notify helper (this calls the project’s `notify()` function). Do this yourself — do not leave summarization to the runner.
    1. Write `.notify-brief.md` in the project root:
       ```
       # auto-rob - <short status>
@@ -37,7 +37,7 @@ The place-tool text may mention waiting for a human yes after review. Ignore tha
       Title examples: `auto-rob - bought PG + CAT`, `auto-rob - no changes`, `auto-rob - sold X`. Keep the body phone-scannable — no raw tool dumps.
    2. Send it with: `npm run notify`
       (optional inline form: `npm run notify -- --title "auto-rob - update" "one-line body"`)
-   3. Confirm the command succeeded before ending the run.
+   3. Confirm the command succeeded before ending the run. If `npm run notify` exits 0 with no send (ntfy unset), treat that as success and continue.
 
 ## run-log.md format
 Keep it short and scannable. Include:

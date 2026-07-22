@@ -1,10 +1,15 @@
-import { loadEnvFile, notify } from "./notify.js";
+import { isNtfyConfigured, loadEnvFile, notify } from "./notify.js";
 
 const message =
   process.argv.slice(2).join(" ").trim() ||
   `auto-rob test - ${new Date().toLocaleString()}`;
 
 await loadEnvFile();
+
+if (!isNtfyConfigured()) {
+  console.error("ntfy is not configured. Set NTFY_URL and NTFY_TOPIC in .env to test.");
+  process.exit(1);
+}
 
 const ok = await notify(message, {
   title: "auto-rob - test",

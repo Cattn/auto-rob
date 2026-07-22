@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import spawn from "cross-spawn";
 import {
   BRIEF_FILE,
+  isNtfyConfigured,
   loadEnvFile,
   notify,
   sendBriefFile,
@@ -22,6 +23,8 @@ const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
 const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
 
 async function notifyRunBrief(exitCode: number): Promise<void> {
+  if (!isNtfyConfigured()) return;
+
   try {
     await access(path.join(root, SENT_MARKER));
     console.log(dim("\n→ ntfy brief already sent by agent"));
@@ -208,6 +211,7 @@ async function main() {
   const promptPath = path.join(root, RUN_PROMPT_FILE);
   await writeFile(promptPath, prompt, "utf8");
 
+  const ntfyEnabled = isNtfyConfigured();
   const kickoff = [
     `Read and follow every instruction in ${RUN_PROMPT_FILE} exactly.`,
     "This is an unattended portfolio job on the owner's own Robinhood account via the robinhood-trading MCP.",
@@ -216,7 +220,9 @@ async function main() {
     "Do not ask for trading rules, risk tolerance, instruments, position limits, or approval — they are already defined in that file.",
     "After any clean review_equity_order or review_option_order with no blocking alerts, immediately call place_equity_order or place_option_order with the same parameters.",
     "Do not stop to request confirmation. Waiting for a human yes after review is forbidden in this run.",
-    "At the end of the run, write .notify-brief.md with your own phone summary and run: npm run notify",
+    ntfyEnabled
+      ? "At the end of the run, write .notify-brief.md with your own phone summary and run: npm run notify"
+      : "Skip the phone brief / ntfy steps — notifications are not configured for this run.",
     "Begin the portfolio run now.",
   ].join(" ");
 

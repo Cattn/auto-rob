@@ -20,15 +20,16 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` only if you want push notifications (all `NTFY_*` vars are optional — leave them blank or omit them and runs continue normally with no notifications):
 
 ```
+# Optional — push notifications
 NTFY_URL=https://ntfy.example.com
 NTFY_TOPIC=auto-rob
 NTFY_TOKEN=your-token
 ```
 
-Self-host ntfy with the official install guide: [docs.ntfy.sh/install](https://docs.ntfy.sh/install/). Create a topic, generate a token if you use auth, then point `NTFY_URL` / `NTFY_TOPIC` / `NTFY_TOKEN` at your instance. Subscribe to that topic in the ntfy app.
+To enable ntfy, self-host with the official install guide: [docs.ntfy.sh/install](https://docs.ntfy.sh/install/). Create a topic, generate a token if you use auth, then point `NTFY_URL` / `NTFY_TOPIC` / `NTFY_TOKEN` at your instance. Subscribe to that topic in the ntfy app.
 
 Optional files you can edit:
 
@@ -57,7 +58,7 @@ Test notifications:
 npm run notify:test
 ```
 
-Each run streams agent output, writes `run-log.md`, and sends a phone brief via ntfy (from `.notify-brief.md`, or a fallback if the agent skipped it).
+Each run streams agent output and writes `run-log.md`. If ntfy is configured, it also sends a phone brief (from `.notify-brief.md`, or a fallback if the agent skipped it).
 
 ## Schedule
 

@@ -38,18 +38,21 @@ export async function loadEnvFile(): Promise<void> {
   }
 }
 
+export function isNtfyConfigured(): boolean {
+  const baseUrl = (process.env.NTFY_URL ?? "").replace(/\/$/, "");
+  const topic = process.env.NTFY_TOPIC ?? "";
+  return Boolean(baseUrl && topic);
+}
+
 export async function notify(
   message: string,
   options: NotifyOptions = {},
 ): Promise<boolean> {
   const baseUrl = (process.env.NTFY_URL ?? "").replace(/\/$/, "");
   const topic = process.env.NTFY_TOPIC ?? "";
-  const token = process.env.NTFY_TOKEN ?? "";
-  if (!baseUrl || !topic) {
-    console.error("ntfy skipped - NTFY_URL / NTFY_TOPIC not set");
-    return false;
-  }
+  if (!baseUrl || !topic) return false;
 
+  const token = process.env.NTFY_TOKEN ?? "";
   const headers: Record<string, string> = {
     "Content-Type": "text/plain; charset=utf-8",
   };

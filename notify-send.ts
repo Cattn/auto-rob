@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BRIEF_FILE,
+  isNtfyConfigured,
   loadEnvFile,
   notify,
   readBriefFile,
@@ -64,6 +65,10 @@ function parseArgs(argv: string[]) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   await loadEnvFile();
+
+  if (!isNtfyConfigured()) {
+    process.exit(0);
+  }
 
   let title = args.title ?? "auto-rob - update";
   let body = args.body;
