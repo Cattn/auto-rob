@@ -8,6 +8,8 @@
     "notify": "npx --yes tsx notify-send.ts",
     "notify:test": "npx --yes tsx test-notify.ts",
     "agent:check": "npx --yes tsx agent-check.ts",
+    "codex:check": "npx --yes tsx codex-mcp-check.ts",
+    "codex:connect": "npx --yes tsx codex-mcp-check.ts --connect",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
