@@ -10,6 +10,9 @@
     "agent:check": "npx --yes tsx agent-check.ts",
     "codex:check": "npx --yes tsx codex-mcp-check.ts",
     "codex:connect": "npx --yes tsx codex-mcp-check.ts --connect",
+    "harness:list": "npx --yes tsx harness-cli.ts list",
+    "cursor:connect": "npx --yes tsx harness-cli.ts connect cursor",
+    "ui": "pnpm --dir ui start",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -1,35 +1,19 @@
-import spawn from "cross-spawn";
-import { resolveAgentCommand } from "./resolve-agent.js";
+import { getHarness } from "./harness/index.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const agent = await resolveAgentCommand();
-console.log(`resolved: ${agent}`);
+const root = path.dirname(fileURLToPath(import.meta.url));
+const status = await getHarness("cursor", root).status();
+
+console.log(`resolved: ${status.binaryPath ?? "(missing)"}`);
 console.log(`platform: ${process.platform}`);
+console.log(`version: ok=${status.binaryOk}`);
+console.log(`mcp configured: ${status.mcpConfigured}`);
+console.log(`mcp authenticated: ${status.mcpAuthenticated}`);
 
-const child = spawn(agent, ["--version"], {
-  stdio: ["ignore", "pipe", "pipe"],
-  windowsHide: true,
-});
-
-let out = "";
-child.stdout?.setEncoding("utf8");
-child.stderr?.setEncoding("utf8");
-child.stdout?.on("data", (chunk: string) => {
-  out += chunk;
-});
-child.stderr?.on("data", (chunk: string) => {
-  out += chunk;
-});
-
-const code = await new Promise<number>((resolve, reject) => {
-  child.on("error", reject);
-  child.on("close", (exitCode) => resolve(exitCode ?? 1));
-});
-
-const version = out.trim();
-if (code !== 0 || !version) {
-  console.error(`agent --version failed (exit ${code}): ${version || "(empty)"}`);
+if (!status.binaryOk) {
+  console.error(status.error ?? "Cursor agent CLI not found");
   process.exit(1);
 }
 
-console.log(`version: ${version}`);
 console.log("ok");

@@ -2,13 +2,16 @@
 
 Unattended Robinhood portfolio agent. Runs on a schedule during market hours, researches the account via the Robinhood Trading MCP, places trades when conviction is high, and sends a short phone brief when each run finishes.
 
+Supports two harnesses — **Cursor** or **ChatGPT (Codex)** — with one active at a time (`auto-rob.config.json`). Connect either (or both) from the Electron Settings UI without using the terminal.
+
 ## Prerequisites
 
 - Node.js 20+
-- [Cursor CLI](https://cursor.com/docs/cli/installation) (`agent` / `cursor-agent` on `PATH`, or the default install path)
-- Optional: `CURSOR_AGENT_PATH` if the CLI is not on `PATH`
+- At least one harness CLI:
+  - [Cursor CLI](https://cursor.com/docs/cli/installation) (`agent` / `cursor-agent`), or
+  - [ChatGPT / Codex](https://chatgpt.com/codex) app (resolves `codex` from PATH or AppData)
 - A Robinhood account with [Agentic Trading](https://robinhood.com/us/en/support/articles/agentic-trading-overview/) enabled
-- The Robinhood Trading MCP connected in Cursor: `https://agent.robinhood.com/mcp/trading`
+- Robinhood Trading MCP connected for the active harness: `https://agent.robinhood.com/mcp/trading`
 - Optional: a self-hosted [ntfy](https://docs.ntfy.sh/install/) instance for push notifications
 
 ## Setup
@@ -30,6 +33,27 @@ NTFY_TOKEN=your-token
 
 Self-host guide: [docs.ntfy.sh/install](https://docs.ntfy.sh/install/). Create a topic, add a token if you use auth, then subscribe in the ntfy app.
 
+### Connect harnesses (recommended: UI)
+
+```bash
+npm run ui
+```
+
+In **Settings**:
+
+1. **Connect** Cursor and/or ChatGPT (Codex) — opens the Robinhood OAuth browser flow automatically.
+2. Pick the **Active harness** used for runs.
+
+If you skipped connect during onboarding, the same Connect buttons are available on Home and in Settings.
+
+### Connect from CLI (optional)
+
+```bash
+npm run cursor:connect   # approve + login Robinhood via global Cursor MCP
+npm run codex:connect    # codex mcp add + mcp login
+npm run harness:list     # status for both harnesses
+```
+
 Optional files you can edit:
 
 | File | Purpose |
@@ -38,19 +62,25 @@ Optional files you can edit:
 | `notes.md` | Extra guidance injected each run |
 | `long-term.md` | Durable goals/watches (agent-maintained) |
 | `run-log.md` | Per-run continuity log (agent-maintained) |
-| `.cursor/cli.json` | CLI allowlist (MCP, WebFetch, notify shell, log writes) |
+| `auto-rob.config.json` | Active harness (`cursor` \| `codex`) |
+| `.cursor/cli.json` | Cursor CLI allowlist |
 | `.cursor/permissions.json` | IDE allowlist for the same tools |
 
+Cursor Robinhood MCP is expected in the **global** `~/.cursor/mcp.json` (not a project `.cursor/mcp.json`).
 ## Run
 
 ```bash
 npm start
 ```
 
-Check that the Cursor agent CLI resolves (no full run):
+Uses the harness selected in `auto-rob.config.json` (override with `AUTO_ROB_HARNESS=codex` if needed).
+
+Check harness CLIs:
 
 ```bash
 npm run agent:check
+npm run codex:check
+npm run harness:list
 ```
 
 Test notifications:
@@ -93,4 +123,4 @@ The first line covers 9:30, 11:30, 1:30, 3:30. The second is an optional ~5:00 P
 
 ## Notes
 
-This places real orders on your funded Agentic account. Review `prompt.md` before enabling a schedule, and keep MCP auth valid in Cursor so unattended runs can use the Robinhood tools.
+This places real orders on your funded Agentic account. Review `prompt.md` before enabling a schedule, and keep MCP auth valid for the active harness so unattended runs can use the Robinhood tools. Cursor and Codex each need their own Robinhood OAuth connect.
