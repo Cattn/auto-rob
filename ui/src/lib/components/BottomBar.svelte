@@ -1,0 +1,78 @@
+<script lang="ts">
+	import { Button } from 'm3-svelte';
+
+	let status = $state('idle');
+	let paused = $state(false);
+	let lastOutcome = $state('Bought PG · no sell');
+	let nextRun = $state('9:35 AM ET');
+
+	const statusLabel = $derived(
+		{
+			idle: 'Idle',
+			running: 'Running',
+			failed: 'Failed',
+			market_closed: 'Market closed'
+		}[status]
+	);
+
+	const statusDot = $derived(
+		{
+			idle: 'bg-outline',
+			running: 'bg-tertiary animate-pulse',
+			failed: 'bg-error',
+			market_closed: 'bg-secondary'
+		}[status]
+	);
+
+	const scheduleLabel = $derived(paused ? 'Paused' : `Next · ${nextRun}`);
+
+	function runNow() {
+		status = 'running';
+		paused = false;
+		lastOutcome = 'Run started…';
+	}
+
+	function pauseSchedule() {
+		paused = !paused;
+	}
+
+	function stop() {
+		status = 'idle';
+		lastOutcome = 'Stopped mid-run · no trades';
+	}
+</script>
+
+<div class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-4">
+	<div
+		class="bg-surface-container border-outline-variant pointer-events-auto flex w-full max-w-3xl items-center gap-4 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-md"
+		role="region"
+		aria-label="Agent transport"
+	>
+		<div class="flex min-w-0 flex-1 items-center gap-3">
+			<span class={['size-2.5 shrink-0 rounded-full', statusDot]} aria-hidden="true"></span>
+			<div class="min-w-0">
+				<div class="flex items-baseline gap-2">
+					<span class="text-primary text-sm font-semibold">{statusLabel}</span>
+					<span class="text-on-surface-variant truncate text-xs">{scheduleLabel}</span>
+				</div>
+				<p class="text-on-surface-variant truncate text-sm">{lastOutcome}</p>
+			</div>
+		</div>
+
+		<div class="flex shrink-0 items-center gap-2">
+			<Button
+				variant="filled"
+				disabled={status === 'running' || status === 'market_closed'}
+				click={runNow}
+			>
+				Run now
+			</Button>
+			<Button variant="tonal" click={pauseSchedule}>
+				{paused ? 'Resume schedule' : 'Pause schedule'}
+			</Button>
+			{#if status === 'running'}
+				<Button variant="text" click={stop}>Stop</Button>
+			{/if}
+		</div>
+	</div>
+</div>
