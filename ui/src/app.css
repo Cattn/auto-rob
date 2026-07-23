@@ -1,3 +1,150 @@
-@import 'tailwindcss';
-@plugin '@tailwindcss/forms';
-@plugin '@tailwindcss/typography';
+@import url('m3-svelte/misc/styles.css');
+@import url('m3-svelte/misc/recommended-styles.css');
+
+iconify-icon {
+	display: inline-block;
+	width: 1em;
+	height: 1em;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	background: rgb(var(--m3-scheme-background));
+	color: rgb(var(--m3-scheme-on-surface));
+	font-family: 'Roboto Flex', sans-serif;
+	font-optical-sizing: auto;
+	font-style: normal;
+	--cp-bg-color: rgb(var(--m3-scheme-surface));
+	--cp-border-color: rgb(var(--m3-scheme-outline-variant));
+	--cp-text-color: rgb(var(--m3-scheme-on-surface));
+	--cp-input-color: rgb(var(--m3-scheme-surface-container-high));
+	--cp-button-hover-color: rgb(var(--m3-scheme-surface-container-highest));
+}
+
+html {
+	box-sizing: border-box;
+	overscroll-behavior: none;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: inherit;
+}
+
+:root {
+	color-scheme: light;
+}
+
+:root,
+::backdrop {
+	--m3-scheme-primary: 53 105 63;
+	--m3-scheme-surface-tint: 53 105 63;
+	--m3-scheme-on-primary: 255 255 255;
+	--m3-scheme-primary-container: 182 241 187;
+	--m3-scheme-on-primary-container: 27 81 41;
+	--m3-scheme-secondary: 81 99 81;
+	--m3-scheme-on-secondary: 255 255 255;
+	--m3-scheme-secondary-container: 211 232 209;
+	--m3-scheme-on-secondary-container: 57 75 58;
+	--m3-scheme-tertiary: 57 101 109;
+	--m3-scheme-on-tertiary: 255 255 255;
+	--m3-scheme-tertiary-container: 189 234 243;
+	--m3-scheme-on-tertiary-container: 31 77 85;
+	--m3-scheme-error: 186 26 26;
+	--m3-scheme-on-error: 255 255 255;
+	--m3-scheme-error-container: 255 218 214;
+	--m3-scheme-on-error-container: 147 0 10;
+	--m3-scheme-background: 247 251 242;
+	--m3-scheme-on-background: 24 29 24;
+	--m3-scheme-surface: 247 251 242;
+	--m3-scheme-on-surface: 24 29 24;
+	--m3-scheme-surface-variant: 221 229 218;
+	--m3-scheme-on-surface-variant: 65 73 65;
+	--m3-scheme-outline: 114 121 112;
+	--m3-scheme-outline-variant: 193 201 190;
+	--m3-scheme-shadow: 0 0 0;
+	--m3-scheme-scrim: 0 0 0;
+	--m3-scheme-inverse-surface: 45 50 44;
+	--m3-scheme-inverse-on-surface: 238 242 234;
+	--m3-scheme-inverse-primary: 155 212 160;
+	--m3-scheme-primary-fixed: 182 241 187;
+	--m3-scheme-on-primary-fixed: 0 33 9;
+	--m3-scheme-primary-fixed-dim: 155 212 160;
+	--m3-scheme-on-primary-fixed-variant: 27 81 41;
+	--m3-scheme-secondary-fixed: 211 232 209;
+	--m3-scheme-on-secondary-fixed: 15 31 17;
+	--m3-scheme-secondary-fixed-dim: 184 204 182;
+	--m3-scheme-on-secondary-fixed-variant: 57 75 58;
+	--m3-scheme-tertiary-fixed: 189 234 243;
+	--m3-scheme-on-tertiary-fixed: 0 31 36;
+	--m3-scheme-tertiary-fixed-dim: 161 206 215;
+	--m3-scheme-on-tertiary-fixed-variant: 31 77 85;
+	--m3-scheme-surface-dim: 215 219 211;
+	--m3-scheme-surface-bright: 247 251 242;
+	--m3-scheme-surface-container-lowest: 255 255 255;
+	--m3-scheme-surface-container-low: 241 245 236;
+	--m3-scheme-surface-container: 235 239 231;
+	--m3-scheme-surface-container-high: 229 233 225;
+	--m3-scheme-surface-container-highest: 224 228 220;
+	--m3-font: 'Roboto Flex', sans-serif;
+}
+
+.dark {
+	color-scheme: dark;
+}
+
+.dark,
+.dark::backdrop {
+	--m3-scheme-primary: 155 212 160;
+	--m3-scheme-surface-tint: 155 212 160;
+	--m3-scheme-on-primary: 0 57 21;
+	--m3-scheme-primary-container: 27 81 41;
+	--m3-scheme-on-primary-container: 182 241 187;
+	--m3-scheme-secondary: 184 204 182;
+	--m3-scheme-on-secondary: 35 52 37;
+	--m3-scheme-secondary-container: 57 75 58;
+	--m3-scheme-on-secondary-container: 211 232 209;
+	--m3-scheme-tertiary: 161 206 215;
+	--m3-scheme-on-tertiary: 0 54 61;
+	--m3-scheme-tertiary-container: 31 77 85;
+	--m3-scheme-on-tertiary-container: 189 234 243;
+	--m3-scheme-error: 255 180 171;
+	--m3-scheme-on-error: 105 0 5;
+	--m3-scheme-error-container: 147 0 10;
+	--m3-scheme-on-error-container: 255 218 214;
+	--m3-scheme-background: 16 21 16;
+	--m3-scheme-on-background: 224 228 220;
+	--m3-scheme-surface: 16 21 16;
+	--m3-scheme-on-surface: 224 228 220;
+	--m3-scheme-surface-variant: 65 73 65;
+	--m3-scheme-on-surface-variant: 193 201 190;
+	--m3-scheme-outline: 139 147 137;
+	--m3-scheme-outline-variant: 65 73 65;
+	--m3-scheme-shadow: 0 0 0;
+	--m3-scheme-scrim: 0 0 0;
+	--m3-scheme-inverse-surface: 224 228 220;
+	--m3-scheme-inverse-on-surface: 45 50 44;
+	--m3-scheme-inverse-primary: 53 105 63;
+	--m3-scheme-primary-fixed: 182 241 187;
+	--m3-scheme-on-primary-fixed: 0 33 9;
+	--m3-scheme-primary-fixed-dim: 155 212 160;
+	--m3-scheme-on-primary-fixed-variant: 27 81 41;
+	--m3-scheme-secondary-fixed: 211 232 209;
+	--m3-scheme-on-secondary-fixed: 15 31 17;
+	--m3-scheme-secondary-fixed-dim: 184 204 182;
+	--m3-scheme-on-secondary-fixed-variant: 57 75 58;
+	--m3-scheme-tertiary-fixed: 189 234 243;
+	--m3-scheme-on-tertiary-fixed: 0 31 36;
+	--m3-scheme-tertiary-fixed-dim: 161 206 215;
+	--m3-scheme-on-tertiary-fixed-variant: 31 77 85;
+	--m3-scheme-surface-dim: 16 21 16;
+	--m3-scheme-surface-bright: 54 58 53;
+	--m3-scheme-surface-container-lowest: 11 15 11;
+	--m3-scheme-surface-container-low: 24 29 24;
+	--m3-scheme-surface-container: 28 33 28;
+	--m3-scheme-surface-container-high: 38 43 38;
+	--m3-scheme-surface-container-highest: 49 54 48;
+	--m3-font: 'Roboto Flex', sans-serif;
+}
