@@ -1,0 +1,29 @@
+import { contextBridge, ipcRenderer } from "electron";
+import type { AutoRobApi, HarnessId, RunEvent } from "../shared/ipc";
+import { IPC } from "../shared/ipc";
+
+const api: AutoRobApi = {
+	getHealth: () => ipcRenderer.invoke(IPC.health),
+	getRunStatus: () => ipcRenderer.invoke(IPC.runStatus),
+	startRun: () => ipcRenderer.invoke(IPC.runStart),
+	stopRun: () => ipcRenderer.invoke(IPC.runStop),
+	readRepoFile: (name) => ipcRenderer.invoke(IPC.readFile, name),
+	getHarnesses: () => ipcRenderer.invoke(IPC.harnesses),
+	getActiveHarness: () => ipcRenderer.invoke(IPC.activeHarness),
+	setActiveHarness: (id: HarnessId) => ipcRenderer.invoke(IPC.setActiveHarness, id),
+	connectHarness: (id: HarnessId) => ipcRenderer.invoke(IPC.connectHarness, id),
+	getHarnessModels: () => ipcRenderer.invoke(IPC.harnessModels),
+	setHarnessModel: (id: HarnessId, model: string) =>
+		ipcRenderer.invoke(IPC.setHarnessModel, id, model),
+	onRunEvent: (handler) => {
+		const listener = (_event: Electron.IpcRendererEvent, payload: RunEvent) => {
+			handler(payload);
+		};
+		ipcRenderer.on(IPC.runEvent, listener);
+		return () => {
+			ipcRenderer.removeListener(IPC.runEvent, listener);
+		};
+	},
+};
+
+contextBridge.exposeInMainWorld("autoRob", api);

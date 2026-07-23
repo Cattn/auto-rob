@@ -1,18 +1,25 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Button } from 'm3-svelte';
+	import { getBackend } from '$lib/backend';
+	import type { RunStatus } from '$lib/backend';
 
 	let status = $state('idle');
 	let paused = $state(false);
-	let lastOutcome = $state('Bought PG · no sell');
-	let nextRun = $state('9:35 AM ET');
+	let lastOutcome = $state('Connecting…');
+	let nextRun = $state('—');
+	let connected = $state(false);
+	let busy = $state(false);
+	let fake = $state(true);
 
 	const statusLabel = $derived(
 		{
 			idle: 'Idle',
-			running: 'Running',
+			running: fake ? 'Fake run' : 'Running',
 			failed: 'Failed',
-			market_closed: 'Market closed'
-		}[status]
+			market_closed: 'Market closed',
+			offline: 'Offline'
+		}[status] ?? status
 	);
 
 	const statusDot = $derived(
@@ -20,26 +27,107 @@
 			idle: 'bg-outline',
 			running: 'bg-tertiary animate-pulse',
 			failed: 'bg-error',
-			market_closed: 'bg-secondary'
-		}[status]
+			market_closed: 'bg-secondary',
+			offline: 'bg-error'
+		}[status] ?? 'bg-outline'
 	);
 
 	const scheduleLabel = $derived(paused ? 'Paused' : `Next · ${nextRun}`);
 
-	function runNow() {
-		status = 'running';
-		paused = false;
-		lastOutcome = 'Run started…';
+	function applyStatus(run: RunStatus) {
+		status = run.state;
+		lastOutcome = run.message;
+		fake = run.fake;
+	}
+
+	async function runNow() {
+		const api = getBackend();
+		if (!api || busy) return;
+		busy = true;
+		try {
+			paused = false;
+			applyStatus(await api.startRun());
+		} catch (err) {
+			status = 'failed';
+			lastOutcome = err instanceof Error ? err.message : String(err);
+		} finally {
+			busy = false;
+		}
 	}
 
 	function pauseSchedule() {
 		paused = !paused;
 	}
 
-	function stop() {
-		status = 'idle';
-		lastOutcome = 'Stopped mid-run · no trades';
+	async function stop() {
+		const api = getBackend();
+		if (!api || busy) return;
+		busy = true;
+		try {
+			applyStatus(await api.stopRun());
+		} catch (err) {
+			status = 'failed';
+			lastOutcome = err instanceof Error ? err.message : String(err);
+		} finally {
+			busy = false;
+		}
 	}
+
+	onMount(() => {
+		const api = getBackend();
+		if (!api) {
+			connected = false;
+			status = 'offline';
+			lastOutcome = 'Open via Electron (pnpm start in ui/) — IPC not available in browser';
+			return;
+		}
+
+		connected = true;
+		let unsubscribe = () => {};
+
+		void (async () => {
+			try {
+				const [health, run] = await Promise.all([api.getHealth(), api.getRunStatus()]);
+				applyStatus(run);
+				fake = health.fakeRuns;
+				if (run.state === 'idle' && run.message === 'Ready') {
+					const harnessLabel =
+						health.harnesses.find((h) => h.id === health.activeHarness)?.label ??
+						health.activeHarness;
+					if (!health.ok) {
+						lastOutcome = health.error ?? 'Agent not found';
+						status = 'failed';
+					} else if (health.fakeRuns) {
+						lastOutcome = `Fake runs on · ${harnessLabel}`;
+					} else {
+						lastOutcome = `REAL runs · ${harnessLabel}`;
+					}
+				}
+				const log = await api.readRepoFile('run-log.md');
+				if (log && run.state === 'idle') {
+					const first = log.trim().split(/\r?\n/).find((l) => l.trim());
+					if (first) lastOutcome = first.replace(/^#+\s*/, '').slice(0, 120);
+				}
+			} catch (err) {
+				status = 'failed';
+				lastOutcome = err instanceof Error ? err.message : String(err);
+			}
+		})();
+
+		unsubscribe = api.onRunEvent((event) => {
+			if (event.type === 'log') {
+				console.log('[auto-rob run]', event.line);
+			}
+			if (event.type === 'status') {
+				console.log('[auto-rob status]', event.status.state, event.status.message);
+				applyStatus(event.status);
+			} else if (event.type === 'log' && (status === 'running' || status === 'failed')) {
+				lastOutcome = event.line.slice(0, 240);
+			}
+		});
+
+		return () => unsubscribe();
+	});
 </script>
 
 <div class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-4">
@@ -55,23 +143,30 @@
 					<span class="text-primary text-sm font-semibold">{statusLabel}</span>
 					<span class="text-on-surface-variant truncate text-xs">{scheduleLabel}</span>
 				</div>
-				<p class="text-on-surface-variant truncate text-sm">{lastOutcome}</p>
+				<p
+					class={[
+						'text-on-surface-variant text-sm',
+						status === 'failed' ? 'line-clamp-3 whitespace-pre-wrap break-words' : 'truncate'
+					]}
+				>
+					{lastOutcome}
+				</p>
 			</div>
 		</div>
 
 		<div class="flex shrink-0 items-center gap-2">
 			<Button
 				variant="filled"
-				disabled={status === 'running' || status === 'market_closed'}
+				disabled={!connected || busy || status === 'running' || status === 'market_closed'}
 				click={runNow}
 			>
 				Run now
 			</Button>
-			<Button variant="tonal" click={pauseSchedule}>
+			<Button variant="tonal" disabled={!connected} click={pauseSchedule}>
 				{paused ? 'Resume schedule' : 'Pause schedule'}
 			</Button>
 			{#if status === 'running'}
-				<Button variant="text" click={stop}>Stop</Button>
+				<Button variant="text" disabled={busy} click={stop}>Stop</Button>
 			{/if}
 		</div>
 	</div>
