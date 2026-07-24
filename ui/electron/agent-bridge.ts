@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { BrowserWindow } from "electron";
@@ -18,6 +18,14 @@ const ALLOWED_FILES = new Set([
 	"run-log.md",
 	"long-term.md",
 ]);
+
+const CONFIG_FILE = "auto-rob.config.json";
+const DEFAULT_ACTIVE_HARNESS: HarnessId = "cursor";
+const DEFAULT_MODELS: HarnessModels = {
+	cursor: "grok-4.5[effort=high,fast=true]",
+	codex: "",
+};
+const HARNESS_CACHE_TTL_MS = 20_000;
 
 const LOG_PREFIX = "[auto-rob]";
 
@@ -188,12 +196,23 @@ function parseJson<T>(text: string): T {
 	return JSON.parse(slice.slice(start, end + 1)) as T;
 }
 
+type AutoRobConfigFile = {
+	activeHarness: HarnessId;
+	models: HarnessModels;
+};
+
+function isHarnessId(value: string): value is HarnessId {
+	return value === "cursor" || value === "codex";
+}
+
 export class AgentBridge {
 	private repoRoot: string | null = null;
 	private child: ChildProcess | null = null;
 	private fakeTimers: ReturnType<typeof setTimeout>[] = [];
 	private runningFake = false;
 	private stopping = false;
+	private harnessesCache: { at: number; data: HarnessConnection[] } | null = null;
+	private harnessesInflight: Promise<HarnessConnection[]> | null = null;
 	private status: RunStatus = {
 		state: "idle",
 		message: "Ready",
@@ -234,6 +253,49 @@ export class AgentBridge {
 		return this.child !== null || this.runningFake;
 	}
 
+	private invalidateHarnessCache() {
+		this.harnessesCache = null;
+	}
+
+	private async readAutoRobConfig(): Promise<AutoRobConfigFile> {
+		const repoRoot = await this.ensureRoot();
+		let activeHarness = DEFAULT_ACTIVE_HARNESS;
+		const models: HarnessModels = { ...DEFAULT_MODELS };
+		try {
+			const raw = await readFile(path.join(repoRoot, CONFIG_FILE), "utf8");
+			const parsed = JSON.parse(raw) as {
+				activeHarness?: string;
+				models?: Partial<HarnessModels>;
+			};
+			if (parsed.activeHarness && isHarnessId(parsed.activeHarness)) {
+				activeHarness = parsed.activeHarness;
+			}
+			if (parsed.models && typeof parsed.models === "object") {
+				for (const id of Object.keys(DEFAULT_MODELS) as HarnessId[]) {
+					if (typeof parsed.models[id] === "string") {
+						models[id] = parsed.models[id]!.trim();
+					}
+				}
+			}
+		} catch {
+			// missing or invalid — defaults
+		}
+		const envOverride = process.env.AUTO_ROB_HARNESS?.trim();
+		if (envOverride && isHarnessId(envOverride)) {
+			activeHarness = envOverride;
+		}
+		return { activeHarness, models };
+	}
+
+	private async writeAutoRobConfig(next: AutoRobConfigFile): Promise<void> {
+		const repoRoot = await this.ensureRoot();
+		await writeFile(
+			path.join(repoRoot, CONFIG_FILE),
+			`${JSON.stringify(next, null, 2)}\n`,
+			"utf8",
+		);
+	}
+
 	private async harnessCli(args: string[]): Promise<string> {
 		const repoRoot = await this.ensureRoot();
 		const npx = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -255,38 +317,65 @@ export class AgentBridge {
 	}
 
 	async getHarnesses(): Promise<HarnessConnection[]> {
-		const out = await this.harnessCli(["list"]);
-		const parsed = parseJson<{ statuses: HarnessConnection[] }>(out);
-		return parsed.statuses;
+		const now = Date.now();
+		if (this.harnessesCache && now - this.harnessesCache.at < HARNESS_CACHE_TTL_MS) {
+			return this.harnessesCache.data;
+		}
+		if (this.harnessesInflight) return this.harnessesInflight;
+
+		this.harnessesInflight = (async () => {
+			try {
+				const out = await this.harnessCli(["list"]);
+				const parsed = parseJson<{ statuses: HarnessConnection[] }>(out);
+				this.harnessesCache = { at: Date.now(), data: parsed.statuses };
+				return parsed.statuses;
+			} finally {
+				this.harnessesInflight = null;
+			}
+		})();
+
+		return this.harnessesInflight;
 	}
 
 	async getActiveHarness(): Promise<HarnessId> {
-		const out = await this.harnessCli(["active"]);
-		const parsed = parseJson<{ activeHarness: HarnessId }>(out);
-		return parsed.activeHarness;
+		const config = await this.readAutoRobConfig();
+		return config.activeHarness;
 	}
 
 	async setActiveHarness(id: HarnessId): Promise<HarnessId> {
 		const out = await this.harnessCli(["set-active", id]);
 		const parsed = parseJson<{ activeHarness: HarnessId }>(out);
+		this.invalidateHarnessCache();
 		return parsed.activeHarness;
 	}
 
 	async connectHarness(id: HarnessId): Promise<HarnessConnection> {
 		const out = await this.harnessCli(["connect", id]);
+		this.invalidateHarnessCache();
 		return parseJson<HarnessConnection>(out);
 	}
 
 	async getHarnessModels(): Promise<HarnessModels> {
-		const out = await this.harnessCli(["models"]);
-		const parsed = parseJson<{ models: HarnessModels }>(out);
-		return parsed.models;
+		const config = await this.readAutoRobConfig();
+		return { ...config.models };
 	}
 
 	async setHarnessModel(id: HarnessId, model: string): Promise<HarnessModels> {
-		const out = await this.harnessCli(["set-model", id, model]);
-		const parsed = parseJson<{ models: HarnessModels }>(out);
-		return parsed.models;
+		if (!isHarnessId(id)) {
+			throw new Error(`Invalid harness id: ${id}`);
+		}
+		const current = await this.readAutoRobConfig();
+		const models: HarnessModels = { ...current.models, [id]: model.trim() };
+		await this.writeAutoRobConfig({ ...current, models });
+		if (this.harnessesCache) {
+			this.harnessesCache = {
+				at: this.harnessesCache.at,
+				data: this.harnessesCache.data.map((h) =>
+					h.id === id ? { ...h, model: models[id] } : h,
+				),
+			};
+		}
+		return models;
 	}
 
 	async getHealth(): Promise<HealthInfo> {
