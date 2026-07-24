@@ -39,11 +39,9 @@ export async function getActiveHarness(
 export async function listHarnessStatuses(
   workspace: string,
 ): Promise<HarnessConnection[]> {
-  const results: HarnessConnection[] = [];
-  for (const id of HARNESS_IDS) {
-    results.push(await getHarness(id, workspace).status());
-  }
-  return results;
+  return Promise.all(
+    HARNESS_IDS.map((id) => getHarness(id, workspace).status()),
+  );
 }
 
 export async function setActiveHarness(

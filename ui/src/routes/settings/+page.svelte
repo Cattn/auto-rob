@@ -2,8 +2,9 @@
 	import { onMount } from 'svelte';
 	import { Button } from 'm3-svelte';
 	import { getBackend } from '$lib/backend';
-	import type { HarnessConnection, HarnessId, HarnessModels } from '$lib/backend';
+	import type { HarnessConnection, HarnessId, HarnessModels, HealthInfo } from '$lib/backend';
 
+	let health = $state<HealthInfo | null>(null);
 	let harnesses = $state<HarnessConnection[]>([]);
 	let activeId = $state<HarnessId | null>(null);
 	let models = $state<HarnessModels>({ cursor: '', codex: '' });
@@ -15,6 +16,30 @@
 	let savingModelId = $state<HarnessId | null>(null);
 
 	const available = $derived(harnesses.filter((h) => h.binaryOk));
+
+	const activeHarness = $derived.by((): HarnessConnection | null => {
+		if (!activeId) return null;
+		return harnesses.find((h) => h.id === activeId) ?? null;
+	});
+
+	const agentPath = $derived(activeHarness?.binaryPath ?? health?.agentPath ?? null);
+
+	function modelsFromHarnesses(list: HarnessConnection[]): HarnessModels {
+		const next: HarnessModels = { cursor: '', codex: '' };
+		for (const h of list) {
+			next[h.id] = h.model ?? '';
+		}
+		return next;
+	}
+
+	function applyHealth(info: HealthInfo) {
+		health = info;
+		harnesses = info.harnesses;
+		activeId = info.activeHarness;
+		const nextModels = modelsFromHarnesses(info.harnesses);
+		models = nextModels;
+		draftModels = { ...nextModels };
+	}
 
 	function statusText(h: HarnessConnection): string {
 		if (!h.binaryOk) return 'CLI missing';
@@ -41,15 +66,7 @@
 	async function refresh() {
 		const api = getBackend();
 		if (!api) return;
-		const [list, active, nextModels] = await Promise.all([
-			api.getHarnesses(),
-			api.getActiveHarness(),
-			api.getHarnessModels()
-		]);
-		harnesses = list;
-		activeId = active;
-		models = nextModels;
-		draftModels = { ...nextModels };
+		applyHealth(await api.getHealth());
 	}
 
 	async function connect(id: HarnessId) {
@@ -75,7 +92,6 @@
 		settingActive = true;
 		try {
 			activeId = await api.setActiveHarness(id);
-			await refresh();
 		} catch (err) {
 			loadError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -92,7 +108,7 @@
 		try {
 			models = await api.setHarnessModel(id, next);
 			draftModels = { ...models };
-			await refresh();
+			harnesses = harnesses.map((h) => (h.id === id ? { ...h, model: models[id] } : h));
 		} catch (err) {
 			loadError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -120,6 +136,53 @@
 	{#if loadError}
 		<p class="text-error mt-4 max-w-lg text-sm">{loadError}</p>
 	{:else}
+		<section class="mt-10 max-w-lg" aria-label="Connection info">
+			<h2 class="text-on-surface text-sm font-semibold tracking-tight">Connection</h2>
+			{#if !health}
+				<p class="text-on-surface-variant mt-2 text-sm">Checking agent…</p>
+			{:else}
+				<ul class="text-on-surface-variant mt-3 space-y-1.5 text-sm">
+					<li>
+						<span class="text-on-surface font-medium">Status</span>
+						· {health.ok ? 'Agent reachable' : 'Agent missing'}
+					</li>
+					{#if activeHarness}
+						<li>
+							<span class="text-on-surface font-medium">Harness</span>
+							· {activeHarness.label}
+						</li>
+						<li>
+							<span class="text-on-surface font-medium">Robinhood</span>
+							· {activeHarness.mcpConfigured && activeHarness.mcpAuthenticated
+								? 'connected'
+								: 'not connected'}
+						</li>
+					{/if}
+					{#if agentPath}
+						<li class="truncate" title={agentPath}>
+							<span class="text-on-surface font-medium">Path</span>
+							· {agentPath}
+						</li>
+					{/if}
+					<li class="truncate" title={health.repoRoot}>
+						<span class="text-on-surface font-medium">Repo</span>
+						· {health.repoRoot || '—'}
+					</li>
+					<li>
+						<span class="text-on-surface font-medium">Runs</span>
+						· {health.fakeRuns ? 'fake / dry-run (safe)' : 'REAL agent'}
+					</li>
+					<li>
+						<span class="text-on-surface font-medium">ntfy</span>
+						· {health.ntfyConfigured ? 'configured' : 'not configured'}
+					</li>
+					{#if health.error}
+						<li class="text-error">{health.error}</li>
+					{/if}
+				</ul>
+			{/if}
+		</section>
+
 		<section class="mt-10 max-w-lg" aria-label="Harnesses">
 			<h2 class="text-on-surface text-sm font-semibold tracking-tight">Harnesses</h2>
 			{#if harnesses.length === 0}
