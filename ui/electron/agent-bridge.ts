@@ -487,6 +487,7 @@ export class AgentBridge {
 			},
 			windowsHide: true,
 			shell: process.platform === "win32",
+			detached: process.platform !== "win32",
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 		bridgeLog("spawned child pid=", this.child.pid ?? "(none)");
