@@ -2,18 +2,29 @@
 	import { onMount } from 'svelte';
 	import { Button } from 'm3-svelte';
 	import { getBackend } from '$lib/backend';
-	import type { HarnessConnection, HarnessId, HarnessModels, HealthInfo } from '$lib/backend';
+	import type {
+		HarnessConnection,
+		HarnessId,
+		HarnessModels,
+		HealthInfo,
+		NtfySettings
+	} from '$lib/backend';
 
 	let health = $state<HealthInfo | null>(null);
 	let harnesses = $state<HarnessConnection[]>([]);
 	let activeId = $state<HarnessId | null>(null);
 	let models = $state<HarnessModels>({ cursor: '', codex: '' });
 	let draftModels = $state<HarnessModels>({ cursor: '', codex: '' });
+	let ntfy = $state<NtfySettings | null>(null);
+	let draftNtfy = $state({ url: '', topic: '', token: '' });
+	let clearNtfyToken = $state(false);
 	let loadError = $state<string | null>(null);
 	let connectingId = $state<HarnessId | null>(null);
 	let connectMessage = $state<string | null>(null);
 	let settingActive = $state(false);
 	let savingModelId = $state<HarnessId | null>(null);
+	let savingNtfy = $state(false);
+	let ntfyMessage = $state<string | null>(null);
 
 	const available = $derived(harnesses.filter((h) => h.binaryOk));
 
@@ -63,10 +74,33 @@
 		return 'Leave blank for Codex default';
 	}
 
+	function applyNtfy(settings: NtfySettings) {
+		ntfy = settings;
+		draftNtfy = {
+			url: settings.url,
+			topic: settings.topic,
+			token: ''
+		};
+		clearNtfyToken = false;
+	}
+
+	const ntfyDirty = $derived(
+		ntfy !== null &&
+			(draftNtfy.url !== ntfy.url ||
+				draftNtfy.topic !== ntfy.topic ||
+				draftNtfy.token.length > 0 ||
+				clearNtfyToken)
+	);
+
 	async function refresh() {
 		const api = getBackend();
 		if (!api) return;
-		applyHealth(await api.getHealth());
+		const [healthInfo, ntfySettings] = await Promise.all([
+			api.getHealth(),
+			api.getNtfySettings()
+		]);
+		applyHealth(healthInfo);
+		applyNtfy(ntfySettings);
 	}
 
 	async function connect(id: HarnessId) {
@@ -116,6 +150,30 @@
 		}
 	}
 
+	async function saveNtfy() {
+		const api = getBackend();
+		if (!api || savingNtfy || !ntfyDirty) return;
+		savingNtfy = true;
+		ntfyMessage = null;
+		try {
+			const saved = await api.setNtfySettings({
+				url: draftNtfy.url,
+				topic: draftNtfy.topic,
+				token: draftNtfy.token || undefined,
+				clearToken: clearNtfyToken
+			});
+			applyNtfy(saved);
+			if (health) health = { ...health, ntfyConfigured: saved.configured };
+			ntfyMessage = saved.configured
+				? 'Saved — phone briefs enabled for the next run.'
+				: 'Saved — leave URL and topic blank to keep notifications off.';
+		} catch (err) {
+			ntfyMessage = err instanceof Error ? err.message : String(err);
+		} finally {
+			savingNtfy = false;
+		}
+	}
+
 	onMount(() => {
 		const api = getBackend();
 		if (!api) {
@@ -136,7 +194,7 @@
 			<p class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">Settings</p>
 			<h1 class="text-on-surface mt-1 text-3xl font-bold tracking-tight">Agent & harness</h1>
 			<p class="text-on-surface-variant mt-2 max-w-xl text-sm leading-relaxed">
-				Connection health, harness install, models, and which agent runs next.
+				Connection health, harness install, phone notifications, models, and which agent runs next.
 			</p>
 		</header>
 
@@ -276,6 +334,107 @@
 							{/each}
 						</div>
 					{/if}
+				</section>
+
+				<section aria-label="Phone notifications">
+					<div class="mb-3">
+						<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
+							Phone notifications (ntfy)
+						</h2>
+						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+							Stored in the workspace <code class="text-on-surface">.env</code> via the app
+							process — the agent cannot read or write these values. Leave blank to disable.
+						</p>
+					</div>
+
+					<div
+						class="bg-surface-container-high ring-outline/50 flex flex-col gap-3 rounded-xl p-4 ring-1"
+					>
+						<label class="flex flex-col gap-1.5" for="ntfy-url">
+							<span class="text-on-surface text-sm font-medium">Server URL</span>
+							<input
+								id="ntfy-url"
+								class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+								type="url"
+								autocomplete="off"
+								spellcheck="false"
+								placeholder="https://ntfy.example.com"
+								bind:value={draftNtfy.url}
+								disabled={savingNtfy || ntfy === null}
+							/>
+						</label>
+
+						<label class="flex flex-col gap-1.5" for="ntfy-topic">
+							<span class="text-on-surface text-sm font-medium">Topic</span>
+							<input
+								id="ntfy-topic"
+								class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+								type="text"
+								autocomplete="off"
+								spellcheck="false"
+								placeholder="auto-rob"
+								bind:value={draftNtfy.topic}
+								disabled={savingNtfy || ntfy === null}
+							/>
+						</label>
+
+						<label class="flex flex-col gap-1.5" for="ntfy-token">
+							<span class="text-on-surface text-sm font-medium">Access token</span>
+							<input
+								id="ntfy-token"
+								class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+								type="password"
+								autocomplete="new-password"
+								spellcheck="false"
+								placeholder={ntfy?.tokenConfigured
+									? 'Leave blank to keep the saved token'
+									: 'Optional if your server requires auth'}
+								bind:value={draftNtfy.token}
+								disabled={savingNtfy || ntfy === null || clearNtfyToken}
+								oninput={() => {
+									if (draftNtfy.token) clearNtfyToken = false;
+								}}
+							/>
+						</label>
+
+						{#if ntfy?.tokenConfigured}
+							<label class="text-on-surface-variant flex items-center gap-2 text-sm">
+								<input
+									type="checkbox"
+									bind:checked={clearNtfyToken}
+									disabled={savingNtfy}
+									onchange={() => {
+										if (clearNtfyToken) draftNtfy.token = '';
+									}}
+								/>
+								Clear saved access token
+							</label>
+						{/if}
+
+						<div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+							<span
+								class={[
+									'rounded-md px-2.5 py-1 text-xs font-medium',
+									(ntfy?.configured ?? false)
+										? 'bg-primary/15 text-primary'
+										: 'bg-surface-container-highest text-on-surface-variant'
+								]}
+							>
+								{(ntfy?.configured ?? false) ? 'configured' : 'not configured'}
+							</span>
+							<Button
+								variant="filled"
+								disabled={savingNtfy || !ntfyDirty}
+								click={() => saveNtfy()}
+							>
+								{savingNtfy ? 'Saving…' : 'Save ntfy'}
+							</Button>
+						</div>
+
+						{#if ntfyMessage}
+							<p class="text-on-surface-variant text-sm leading-relaxed">{ntfyMessage}</p>
+						{/if}
+					</div>
 				</section>
 
 				<section aria-label="Models">

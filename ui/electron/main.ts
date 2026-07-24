@@ -59,6 +59,8 @@ function registerIpc() {
 	ipcMain.handle(IPC.setHarnessModel, (_event, id, model) =>
 		bridge.setHarnessModel(id, model),
 	);
+	ipcMain.handle(IPC.ntfyGet, () => bridge.getNtfySettings());
+	ipcMain.handle(IPC.ntfySet, (_event, settings) => bridge.setNtfySettings(settings));
 }
 
 app.on("ready", () => {

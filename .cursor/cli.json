@@ -2,8 +2,6 @@
   "permissions": {
     "allow": [
       "Mcp(robinhood-trading:*)",
-      "Shell(npm)",
-      "Shell(npx)",
       "Read(**)",
       "Write(run-log.md)",
       "Write(long-term.md)",
@@ -17,7 +15,9 @@
       "Write(.env*)",
       "Shell(rm)",
       "Shell(del)",
-      "Shell(git)"
+      "Shell(git)",
+      "Shell(npm)",
+      "Shell(npx)"
     ]
   }
 }

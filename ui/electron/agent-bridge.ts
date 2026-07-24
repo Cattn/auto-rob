@@ -7,6 +7,7 @@ import type {
 	HarnessId,
 	HarnessModels,
 	HealthInfo,
+	NtfySettings,
 	OnboardingAnswers,
 	OnboardingApplyResult,
 	OnboardingState,
@@ -38,7 +39,12 @@ import {
 	migrateWorkspaceFromRepo,
 	resolveDefaultWorkspace,
 } from "../../workspace";
-import { loadEnvFile, isNtfyConfigured } from "../../notify";
+import {
+	isNtfyConfigured,
+	loadEnvFile,
+	readNtfySettings,
+	writeNtfySettings,
+} from "../../notify";
 import { BUNDLED_WORKSPACE_DEFAULTS } from "./workspace-defaults";
 
 const ALLOWED_FILES = new Set([
@@ -393,6 +399,21 @@ export class AgentBridge {
 			};
 		}
 		return models;
+	}
+
+	async getNtfySettings(): Promise<NtfySettings> {
+		const workspace = await this.ensureRoot();
+		return readNtfySettings(workspace);
+	}
+
+	async setNtfySettings(input: {
+		url: string;
+		topic: string;
+		token?: string;
+		clearToken?: boolean;
+	}): Promise<NtfySettings> {
+		const workspace = await this.ensureRoot();
+		return writeNtfySettings(workspace, input);
 	}
 
 	async getHealth(): Promise<HealthInfo> {

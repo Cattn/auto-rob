@@ -12,8 +12,8 @@
 
 	let tradeStyle = $state<TradeStyle>('balanced');
 	let intent = $state('');
-	let minPerTradeUsd = $state<string>('');
-	let minBpToAddPosition = $state<string>('');
+	let minPerTradeUsd = $state<string | number>('');
+	let minBpToAddPosition = $state<string | number>('');
 
 	let loading = $state(true);
 	let saving = $state(false);
@@ -24,12 +24,20 @@
 	let statusOk = $state(true);
 	let state = $state<OnboardingState | null>(null);
 
+	function parseOptionalUsd(raw: string | number | null | undefined): number | null {
+		if (raw === null || raw === undefined || raw === '') return null;
+		const s = String(raw).trim();
+		if (!s) return null;
+		const n = Number(s);
+		return Number.isFinite(n) && n >= 0 ? n : null;
+	}
+
 	function buildAnswers(): OnboardingAnswers {
 		return {
 			tradeStyle,
 			intent,
-			minPerTradeUsd: minPerTradeUsd.trim() ? Number(minPerTradeUsd) || null : null,
-			minBpToAddPosition: minBpToAddPosition.trim() ? Number(minBpToAddPosition) || null : null,
+			minPerTradeUsd: parseOptionalUsd(minPerTradeUsd),
+			minBpToAddPosition: parseOptionalUsd(minBpToAddPosition),
 		};
 	}
 
