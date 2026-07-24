@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -28,7 +29,7 @@
 	let state = $state<OnboardingState | null>(null);
 
 	const editMode = $derived(
-		page.url.searchParams.has('edit') || Boolean(state?.completedAt),
+		(browser && page.url.searchParams.has('edit')) || Boolean(state?.completedAt),
 	);
 
 	function parseOptionalUsd(raw: string | number | null | undefined): number | null {
