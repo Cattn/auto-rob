@@ -18,7 +18,7 @@ export default defineConfig({
       allow: [repoRoot],
     },
   },
-  assetsInclude: ["**/*.md"],
+  assetsInclude: ["**/*.md", "**/.env.example"],
   resolve: {
     conditions: ["node"],
     mainFields: ["module", "jsnext:main", "jsnext"],

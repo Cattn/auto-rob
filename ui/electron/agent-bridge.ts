@@ -35,7 +35,8 @@ import { runPortfolio } from "../../run";
 import {
 	ensureWorkspaceSeeded,
 	loadDefaultsFromRepoRoot,
-	WORKSPACE_SUBDIR,
+	migrateWorkspaceFromRepo,
+	resolveDefaultWorkspace,
 } from "../../workspace";
 import { loadEnvFile, isNtfyConfigured } from "../../notify";
 import { BUNDLED_WORKSPACE_DEFAULTS } from "./workspace-defaults";
@@ -180,18 +181,15 @@ export class AgentBridge {
 		if (this.workspaceRoot) return this.workspaceRoot;
 
 		const envWorkspace = process.env.AUTO_ROB_WORKSPACE?.trim();
-		if (envWorkspace) {
-			this.workspaceRoot = path.resolve(envWorkspace);
-		} else if (app.isPackaged) {
-			this.workspaceRoot = path.join(app.getPath("userData"), WORKSPACE_SUBDIR);
-		} else {
-			this.workspaceRoot = await findRepoRoot(import.meta.dirname);
-		}
+		this.workspaceRoot = envWorkspace
+			? path.resolve(envWorkspace)
+			: resolveDefaultWorkspace();
 
 		let seedDefaults = BUNDLED_WORKSPACE_DEFAULTS;
 		if (!app.isPackaged) {
 			try {
 				const repoRoot = await findRepoRoot(import.meta.dirname);
+				await migrateWorkspaceFromRepo(repoRoot, this.workspaceRoot);
 				seedDefaults = await loadDefaultsFromRepoRoot(repoRoot);
 			} catch {
 				seedDefaults = BUNDLED_WORKSPACE_DEFAULTS;
