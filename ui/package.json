@@ -56,7 +56,9 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "cross-spawn": "^7.0.6",
+    "electron-squirrel-startup": "^1.0.1",
+    "which": "^6.0.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

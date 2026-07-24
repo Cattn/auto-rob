@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AutoRobApi, HarnessId, RunEvent } from "../shared/ipc";
+import type { AutoRobApi, HarnessId, OnboardingAnswers, RunEvent } from "../shared/ipc";
 import { IPC } from "../shared/ipc";
 
 const api: AutoRobApi = {
@@ -12,6 +12,12 @@ const api: AutoRobApi = {
 	getActiveHarness: () => ipcRenderer.invoke(IPC.activeHarness),
 	setActiveHarness: (id: HarnessId) => ipcRenderer.invoke(IPC.setActiveHarness, id),
 	connectHarness: (id: HarnessId) => ipcRenderer.invoke(IPC.connectHarness, id),
+	getOnboarding: () => ipcRenderer.invoke(IPC.onboardingGet),
+	saveOnboarding: (answers: OnboardingAnswers, opts?: { draft?: boolean }) =>
+		ipcRenderer.invoke(IPC.onboardingSave, answers, opts),
+	applyOnboarding: (answers: OnboardingAnswers, opts?: { agent?: boolean }) =>
+		ipcRenderer.invoke(IPC.onboardingApply, answers, opts),
+	resetPrompt: () => ipcRenderer.invoke(IPC.promptReset),
 	getHarnessModels: () => ipcRenderer.invoke(IPC.harnessModels),
 	setHarnessModel: (id: HarnessId, model: string) =>
 		ipcRenderer.invoke(IPC.setHarnessModel, id, model),

@@ -11,7 +11,42 @@ export const IPC = {
 	connectHarness: "auto-rob:harness:connect",
 	harnessModels: "auto-rob:harness:models",
 	setHarnessModel: "auto-rob:harness:set-model",
+	onboardingGet: "auto-rob:onboarding:get",
+	onboardingSave: "auto-rob:onboarding:save",
+	onboardingApply: "auto-rob:onboarding:apply",
+	promptReset: "auto-rob:prompt:reset",
 } as const;
+
+export type TradeStyle = "more_active" | "balanced" | "less_frequent";
+
+export type OnboardingAnswers = {
+	tradeStyle: TradeStyle;
+	intent: string;
+	minPerTradeUsd: number | null;
+	minBpToAddPosition: number | null;
+};
+
+export type OnboardingState = {
+	answers: OnboardingAnswers;
+	completedAt: string | null;
+	appliedAt: string | null;
+	applyMode: "direct" | "agent" | null;
+};
+
+export type OnboardingApplyResult = {
+	ok: boolean;
+	mode: "direct" | "agent";
+	state: OnboardingState;
+	promptPath: string;
+	message: string;
+	exitCode: number | null;
+};
+
+export type PromptResetResult = {
+	ok: boolean;
+	promptPath: string;
+	message: string;
+};
 
 export type RunState = "idle" | "running" | "failed";
 
@@ -66,5 +101,9 @@ export type AutoRobApi = {
 	connectHarness: (id: HarnessId) => Promise<HarnessConnection>;
 	getHarnessModels: () => Promise<HarnessModels>;
 	setHarnessModel: (id: HarnessId, model: string) => Promise<HarnessModels>;
+	getOnboarding: () => Promise<OnboardingState>;
+	saveOnboarding: (answers: OnboardingAnswers, opts?: { draft?: boolean }) => Promise<OnboardingState>;
+	applyOnboarding: (answers: OnboardingAnswers, opts?: { agent?: boolean }) => Promise<OnboardingApplyResult>;
+	resetPrompt: () => Promise<PromptResetResult>;
 	onRunEvent: (handler: (event: RunEvent) => void) => () => void;
 };

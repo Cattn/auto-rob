@@ -8,6 +8,7 @@ if (started) {
 	app.quit();
 }
 
+const runOnce = process.argv.includes("--run-once");
 const bridge = new AgentBridge();
 
 const createWindow = () => {
@@ -46,6 +47,14 @@ function registerIpc() {
 	ipcMain.handle(IPC.activeHarness, () => bridge.getActiveHarness());
 	ipcMain.handle(IPC.setActiveHarness, (_event, id) => bridge.setActiveHarness(id));
 	ipcMain.handle(IPC.connectHarness, (_event, id) => bridge.connectHarness(id));
+	ipcMain.handle(IPC.onboardingGet, () => bridge.getOnboarding());
+	ipcMain.handle(IPC.onboardingSave, (_event, answers, opts) =>
+		bridge.saveOnboarding(answers, opts),
+	);
+	ipcMain.handle(IPC.onboardingApply, (_event, answers, opts) =>
+		bridge.applyOnboarding(answers, opts),
+	);
+	ipcMain.handle(IPC.promptReset, () => bridge.resetPrompt());
 	ipcMain.handle(IPC.harnessModels, () => bridge.getHarnessModels());
 	ipcMain.handle(IPC.setHarnessModel, (_event, id, model) =>
 		bridge.setHarnessModel(id, model),
@@ -53,17 +62,35 @@ function registerIpc() {
 }
 
 app.on("ready", () => {
+	if (runOnce) {
+		process.env.AUTO_ROB_REAL_RUNS = "1";
+		void (async () => {
+			try {
+				const status = await bridge.startRunAndWait();
+				const code =
+					status.state === "failed" ? (status.exitCode ?? 1) : (status.exitCode ?? 0);
+				app.exit(code);
+			} catch (err) {
+				console.error(err);
+				app.exit(1);
+			}
+		})();
+		return;
+	}
+
 	registerIpc();
 	createWindow();
 });
 
 app.on("window-all-closed", () => {
+	if (runOnce) return;
 	if (process.platform !== "darwin") {
 		app.quit();
 	}
 });
 
 app.on("activate", () => {
+	if (runOnce) return;
 	if (BrowserWindow.getAllWindows().length === 0) {
 		createWindow();
 	}

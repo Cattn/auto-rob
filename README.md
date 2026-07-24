@@ -6,7 +6,8 @@ Supports two harnesses — **Cursor** or **ChatGPT (Codex)** — with one active
 
 ## Prerequisites
 
-- Node.js 20+
+- For **packaged** builds: Cursor and/or Codex CLIs only (no Node/npm required at runtime)
+- For **dev** / CLI: Node.js 20+
 - At least one harness CLI:
   - [Cursor CLI](https://cursor.com/docs/cli/installation) (`agent` / `cursor-agent`), or
   - [ChatGPT / Codex](https://chatgpt.com/codex) app (resolves `codex` from PATH or AppData)
@@ -95,7 +96,11 @@ Each run streams agent output and writes `run-log.md`. If ntfy is configured, it
 
 Aim for roughly every 2 hours during US market hours (Mon–Fri). Avoid firing exactly at the close if you want a last decision while the market is still open.
 
-### Windows (Task Scheduler)
+### Packaged Electron app (recommended)
+
+After `npm run make` / installing the app, point Task Scheduler or cron at the packaged binary with `--run-once`. No git clone or Node/`npm` is required for the agent backend — only Cursor and/or Codex CLIs.
+
+**Windows (Task Scheduler)**
 
 1. Open Task Scheduler → Create Task.
 2. General: run whether user is logged on or not; configure for your Windows version.
@@ -104,19 +109,33 @@ Aim for roughly every 2 hours during US market hours (Mon–Fri). Avoid firing e
    - Start: `9:30 AM`
    - Repeat every: `2 hours`
    - Duration: `6 hours` (fires 9:30, 11:30, 1:30, 3:30)
-4. Optional second trigger for a late run (e.g. `5:00 PM`, no repeat) so you get a pre-close pass without hitting 5:30.
+4. Optional second trigger for a late run (e.g. `5:00 PM`, no repeat).
 5. Actions → Start a program:
-   - Program: `npm` (or full path to `npm.cmd`)
-   - Arguments: `start`
-   - Start in: path to this repo
+   - Program: full path to `electron-svelte.exe` (or your product name after packaging)
+   - Arguments: `--run-once`
+   - Start in: can be left blank
 
-### Linux (cron)
+Workspace files (`prompt.md`, notes, config, logs) live under the OS user-data folder (e.g. `%APPDATA%/electron-svelte/workspace` on Windows). Override with `AUTO_ROB_WORKSPACE` if needed.
+
+### Dev clone (`npm start`)
+
+**Windows (Task Scheduler)** — Program `npm` / `npm.cmd`, Arguments `start`, Start in = this repo.
+
+**Linux (cron)**
 
 ```cron
 # Every 2 hours during market hours (adjust TZ to your market)
 TZ=America/New_York
 30 9-15/2 * * 1-5 cd /path/to/auto-rob && npm start >> /var/log/auto-rob.log 2>&1
 0 17 * * 1-5 cd /path/to/auto-rob && npm start >> /var/log/auto-rob.log 2>&1
+```
+
+**Packaged install (cron)**
+
+```cron
+TZ=America/New_York
+30 9-15/2 * * 1-5 "/path/to/auto-rob" --run-once >> /var/log/auto-rob.log 2>&1
+0 17 * * 1-5 "/path/to/auto-rob" --run-once >> /var/log/auto-rob.log 2>&1
 ```
 
 The first line covers 9:30, 11:30, 1:30, 3:30. The second is an optional ~5:00 PM pre-close run. Edit crontab with `crontab -e`.

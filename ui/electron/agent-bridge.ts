@@ -1,16 +1,45 @@
 import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
-import { BrowserWindow } from "electron";
+import { app, BrowserWindow } from "electron";
 import type {
 	HarnessConnection,
 	HarnessId,
 	HarnessModels,
 	HealthInfo,
+	OnboardingAnswers,
+	OnboardingApplyResult,
+	OnboardingState,
+	PromptResetResult,
 	RunEvent,
 	RunStatus,
 } from "../shared/ipc";
 import { IPC } from "../shared/ipc";
+import {
+	getActiveHarnessId,
+	getHarness,
+	getHarnessModels,
+	isHarnessId,
+	listHarnessStatuses,
+	setActiveHarness,
+	setHarnessModel,
+} from "../../harness/index";
+import {
+	applyOnboardingDirect,
+	applyOnboardingWithAgent,
+	loadOnboarding,
+	normalizeAnswers,
+	resetPromptToDefault,
+	saveOnboarding,
+} from "../../onboarding";
+import { runPortfolio } from "../../run";
+import {
+	ensureWorkspaceSeeded,
+	loadDefaultsFromRepoRoot,
+	WORKSPACE_SUBDIR,
+} from "../../workspace";
+import { loadEnvFile, isNtfyConfigured } from "../../notify";
+import { BUNDLED_WORKSPACE_DEFAULTS } from "./workspace-defaults";
 
 const ALLOWED_FILES = new Set([
 	"notes.md",
@@ -125,92 +154,19 @@ export async function findRepoRoot(startDir: string): Promise<string> {
 	}
 }
 
-async function loadEnvFile(repoRoot: string): Promise<void> {
-	try {
-		const raw = await readFile(path.join(repoRoot, ".env"), "utf8");
-		for (const line of raw.split(/\r?\n/)) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith("#")) continue;
-			const eq = trimmed.indexOf("=");
-			if (eq <= 0) continue;
-			const key = trimmed.slice(0, eq).trim();
-			let value = trimmed.slice(eq + 1).trim();
-			if (
-				(value.startsWith('"') && value.endsWith('"')) ||
-				(value.startsWith("'") && value.endsWith("'"))
-			) {
-				value = value.slice(1, -1);
-			}
-			if (!(key in process.env)) process.env[key] = value;
-		}
-	} catch {
-		// optional
-	}
-}
-
-function isNtfyConfigured(): boolean {
-	const baseUrl = (process.env.NTFY_URL ?? "").replace(/\/$/, "");
-	const topic = process.env.NTFY_TOPIC ?? "";
-	return Boolean(baseUrl && topic);
-}
-
-function runCommand(
-	command: string,
-	args: string[],
-	cwd: string,
-): Promise<{ code: number; out: string; err: string }> {
-	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, {
-			cwd,
-			env: process.env,
-			windowsHide: true,
-			shell: process.platform === "win32",
-			stdio: ["ignore", "pipe", "pipe"],
-		});
-		let out = "";
-		let err = "";
-		child.stdout?.setEncoding("utf8");
-		child.stderr?.setEncoding("utf8");
-		child.stdout?.on("data", (chunk: string) => {
-			out += chunk;
-		});
-		child.stderr?.on("data", (chunk: string) => {
-			err += chunk;
-		});
-		child.on("error", reject);
-		child.on("close", (code) =>
-			resolve({ code: code ?? 1, out: out.trim(), err: err.trim() }),
-		);
-	});
-}
-
-function parseJson<T>(text: string): T {
-	const marker = "__AUTO_ROB_JSON__";
-	const idx = text.lastIndexOf(marker);
-	const slice = idx >= 0 ? text.slice(idx + marker.length).trim() : text.trim();
-	const start = slice.indexOf("{");
-	const end = slice.lastIndexOf("}");
-	if (start < 0 || end < start) {
-		throw new Error(`Expected JSON object, got: ${text.slice(0, 200)}`);
-	}
-	return JSON.parse(slice.slice(start, end + 1)) as T;
-}
-
 type AutoRobConfigFile = {
 	activeHarness: HarnessId;
 	models: HarnessModels;
 };
 
-function isHarnessId(value: string): value is HarnessId {
-	return value === "cursor" || value === "codex";
-}
-
 export class AgentBridge {
-	private repoRoot: string | null = null;
+	private workspaceRoot: string | null = null;
 	private child: ChildProcess | null = null;
+	private abort: AbortController | null = null;
 	private fakeTimers: ReturnType<typeof setTimeout>[] = [];
 	private runningFake = false;
 	private stopping = false;
+	private runTask: Promise<void> | null = null;
 	private harnessesCache: { at: number; data: HarnessConnection[] } | null = null;
 	private harnessesInflight: Promise<HarnessConnection[]> | null = null;
 	private status: RunStatus = {
@@ -222,10 +178,31 @@ export class AgentBridge {
 	};
 
 	async ensureRoot(): Promise<string> {
-		if (this.repoRoot) return this.repoRoot;
-		this.repoRoot = await findRepoRoot(import.meta.dirname);
-		await loadEnvFile(this.repoRoot);
-		return this.repoRoot;
+		if (this.workspaceRoot) return this.workspaceRoot;
+
+		const envWorkspace = process.env.AUTO_ROB_WORKSPACE?.trim();
+		if (envWorkspace) {
+			this.workspaceRoot = path.resolve(envWorkspace);
+		} else if (app.isPackaged) {
+			this.workspaceRoot = path.join(app.getPath("userData"), WORKSPACE_SUBDIR);
+		} else {
+			this.workspaceRoot = await findRepoRoot(import.meta.dirname);
+		}
+
+		let seedDefaults = BUNDLED_WORKSPACE_DEFAULTS;
+		if (!app.isPackaged) {
+			try {
+				const repoRoot = await findRepoRoot(import.meta.dirname);
+				seedDefaults = await loadDefaultsFromRepoRoot(repoRoot);
+			} catch {
+				seedDefaults = BUNDLED_WORKSPACE_DEFAULTS;
+			}
+		}
+
+		await ensureWorkspaceSeeded(this.workspaceRoot, seedDefaults);
+		await loadEnvFile(this.workspaceRoot);
+		bridgeLog("workspace ready", this.workspaceRoot);
+		return this.workspaceRoot;
 	}
 
 	getStatus(): RunStatus {
@@ -250,7 +227,7 @@ export class AgentBridge {
 	}
 
 	private isBusy(): boolean {
-		return this.child !== null || this.runningFake;
+		return this.runTask !== null || this.runningFake;
 	}
 
 	private invalidateHarnessCache() {
@@ -258,11 +235,11 @@ export class AgentBridge {
 	}
 
 	private async readAutoRobConfig(): Promise<AutoRobConfigFile> {
-		const repoRoot = await this.ensureRoot();
+		const workspace = await this.ensureRoot();
 		let activeHarness = DEFAULT_ACTIVE_HARNESS;
 		const models: HarnessModels = { ...DEFAULT_MODELS };
 		try {
-			const raw = await readFile(path.join(repoRoot, CONFIG_FILE), "utf8");
+			const raw = await readFile(path.join(workspace, CONFIG_FILE), "utf8");
 			const parsed = JSON.parse(raw) as {
 				activeHarness?: string;
 				models?: Partial<HarnessModels>;
@@ -288,32 +265,79 @@ export class AgentBridge {
 	}
 
 	private async writeAutoRobConfig(next: AutoRobConfigFile): Promise<void> {
-		const repoRoot = await this.ensureRoot();
+		const workspace = await this.ensureRoot();
 		await writeFile(
-			path.join(repoRoot, CONFIG_FILE),
+			path.join(workspace, CONFIG_FILE),
 			`${JSON.stringify(next, null, 2)}\n`,
 			"utf8",
 		);
 	}
 
-	private async harnessCli(args: string[]): Promise<string> {
-		const repoRoot = await this.ensureRoot();
-		const npx = process.platform === "win32" ? "npx.cmd" : "npx";
-		bridgeLog("harness-cli", args.join(" "), `(cwd=${repoRoot})`);
-		const result = await runCommand(
-			npx,
-			["--yes", "tsx", "harness-cli.ts", ...args, "--root", repoRoot],
-			repoRoot,
-		);
-		if (result.code !== 0) {
-			bridgeError(
-				"harness-cli failed",
-				`exit=${result.code}`,
-				result.err || result.out || "(no output)",
-			);
-			throw new Error(result.err || result.out || `harness-cli failed (exit ${result.code})`);
+	private installLogCapture(): () => void {
+		const originalLog = console.log;
+		const originalError = console.error;
+		const originalWarn = console.warn;
+		const handle = (args: unknown[]) => {
+			const line = sanitizeLog(args.map(String).join(" ")).trim();
+			if (!line || shouldIgnoreLogLine(line)) return;
+			this.emit({ type: "log", line });
+			if (/^->\s/.test(line) || line.startsWith("→")) {
+				this.setStatus({
+					message: line.replace(/^(?:->|→)\s*/, ""),
+				});
+			} else if (line.includes("done -")) {
+				this.setStatus({ message: line });
+			}
+		};
+		console.log = (...args: unknown[]) => {
+			handle(args);
+			originalLog(...args);
+		};
+		console.error = (...args: unknown[]) => {
+			handle(args);
+			originalError(...args);
+		};
+		console.warn = (...args: unknown[]) => {
+			handle(args);
+			originalWarn(...args);
+		};
+		return () => {
+			console.log = originalLog;
+			console.error = originalError;
+			console.warn = originalWarn;
+		};
+	}
+
+	async getOnboarding(): Promise<OnboardingState> {
+		const workspace = await this.ensureRoot();
+		return loadOnboarding(workspace);
+	}
+
+	async saveOnboarding(
+		answers: OnboardingAnswers,
+		opts?: { draft?: boolean },
+	): Promise<OnboardingState> {
+		const workspace = await this.ensureRoot();
+		return saveOnboarding(workspace, normalizeAnswers(answers), {
+			markCompleted: !opts?.draft,
+		});
+	}
+
+	async applyOnboarding(
+		answers: OnboardingAnswers,
+		opts?: { agent?: boolean },
+	): Promise<OnboardingApplyResult> {
+		const workspace = await this.ensureRoot();
+		const normalized = normalizeAnswers(answers);
+		if (opts?.agent) {
+			return applyOnboardingWithAgent(workspace, normalized);
 		}
-		return result.out;
+		return applyOnboardingDirect(workspace, normalized);
+	}
+
+	async resetPrompt(): Promise<PromptResetResult> {
+		const workspace = await this.ensureRoot();
+		return resetPromptToDefault(workspace);
 	}
 
 	async getHarnesses(): Promise<HarnessConnection[]> {
@@ -325,10 +349,10 @@ export class AgentBridge {
 
 		this.harnessesInflight = (async () => {
 			try {
-				const out = await this.harnessCli(["list"]);
-				const parsed = parseJson<{ statuses: HarnessConnection[] }>(out);
-				this.harnessesCache = { at: Date.now(), data: parsed.statuses };
-				return parsed.statuses;
+				const workspace = await this.ensureRoot();
+				const statuses = await listHarnessStatuses(workspace);
+				this.harnessesCache = { at: Date.now(), data: statuses };
+				return statuses;
 			} finally {
 				this.harnessesInflight = null;
 			}
@@ -338,35 +362,35 @@ export class AgentBridge {
 	}
 
 	async getActiveHarness(): Promise<HarnessId> {
-		const config = await this.readAutoRobConfig();
-		return config.activeHarness;
+		const workspace = await this.ensureRoot();
+		return getActiveHarnessId(workspace);
 	}
 
 	async setActiveHarness(id: HarnessId): Promise<HarnessId> {
-		const out = await this.harnessCli(["set-active", id]);
-		const parsed = parseJson<{ activeHarness: HarnessId }>(out);
+		const workspace = await this.ensureRoot();
+		await setActiveHarness(workspace, id);
 		this.invalidateHarnessCache();
-		return parsed.activeHarness;
+		return id;
 	}
 
 	async connectHarness(id: HarnessId): Promise<HarnessConnection> {
-		const out = await this.harnessCli(["connect", id]);
+		const workspace = await this.ensureRoot();
+		const status = await getHarness(id, workspace).connect({ login: true });
 		this.invalidateHarnessCache();
-		return parseJson<HarnessConnection>(out);
+		return status;
 	}
 
 	async getHarnessModels(): Promise<HarnessModels> {
-		const config = await this.readAutoRobConfig();
-		return { ...config.models };
+		const workspace = await this.ensureRoot();
+		return getHarnessModels(workspace);
 	}
 
 	async setHarnessModel(id: HarnessId, model: string): Promise<HarnessModels> {
 		if (!isHarnessId(id)) {
 			throw new Error(`Invalid harness id: ${id}`);
 		}
-		const current = await this.readAutoRobConfig();
-		const models: HarnessModels = { ...current.models, [id]: model.trim() };
-		await this.writeAutoRobConfig({ ...current, models });
+		const workspace = await this.ensureRoot();
+		const models = await setHarnessModel(workspace, id, model.trim());
 		if (this.harnessesCache) {
 			this.harnessesCache = {
 				at: this.harnessesCache.at,
@@ -400,7 +424,7 @@ export class AgentBridge {
 				harnesses,
 			};
 		} catch (err) {
-			let repoRoot = this.repoRoot ?? "";
+			let repoRoot = this.workspaceRoot ?? "";
 			try {
 				repoRoot = await this.ensureRoot();
 			} catch {
@@ -424,9 +448,9 @@ export class AgentBridge {
 		if (!ALLOWED_FILES.has(name)) {
 			throw new Error(`File not allowed: ${name}`);
 		}
-		const repoRoot = await this.ensureRoot();
+		const workspace = await this.ensureRoot();
 		try {
-			const content = await readFile(path.join(repoRoot, name), "utf8");
+			const content = await readFile(path.join(workspace, name), "utf8");
 			return content;
 		} catch {
 			return null;
@@ -464,6 +488,15 @@ export class AgentBridge {
 			this.emit({ type: "log", line: `ERROR: ${message}` });
 			return this.getStatus();
 		}
+	}
+
+	async startRunAndWait(): Promise<RunStatus> {
+		const status = await this.startRun();
+		if (this.runTask) await this.runTask;
+		while (this.runningFake) {
+			await new Promise((r) => setTimeout(r, 100));
+		}
+		return this.getStatus() ?? status;
 	}
 
 	private startFakeRun(): RunStatus {
@@ -510,54 +543,11 @@ export class AgentBridge {
 	}
 
 	private async startRealRun(): Promise<RunStatus> {
-		const repoRoot = await this.ensureRoot();
-		const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
-		const recentLines: string[] = [];
-		const lineBuf = { stdout: "", stderr: "" };
-		const pushRecent = (line: string) => {
-			recentLines.push(line);
-			if (recentLines.length > 40) recentLines.shift();
-		};
-
-		const handleLine = (stream: "stdout" | "stderr", raw: string) => {
-			const trimmed = sanitizeLog(raw).trim();
-			if (!trimmed || shouldIgnoreLogLine(trimmed)) return;
-			pushRecent(trimmed);
-			if (stream === "stderr") {
-				bridgeWarn(`run ${stream}:`, trimmed);
-			} else {
-				bridgeLog(`run ${stream}:`, trimmed);
-			}
-			this.emit({ type: "log", line: trimmed });
-			if (/^->\s/.test(trimmed) || trimmed.startsWith("→")) {
-				this.setStatus({
-					message: trimmed.replace(/^(?:->|→)\s*/, ""),
-				});
-			} else if (trimmed.includes("done -")) {
-				this.setStatus({ message: trimmed });
-			}
-		};
-
-		const onChunk = (stream: "stdout" | "stderr", chunk: string) => {
-			lineBuf[stream] += sanitizeLog(chunk.toString());
-			const parts = lineBuf[stream].split(/\r?\n/);
-			lineBuf[stream] = parts.pop() ?? "";
-			for (const part of parts) handleLine(stream, part);
-		};
-
-		const flushBuffers = () => {
-			for (const stream of ["stdout", "stderr"] as const) {
-				if (lineBuf[stream].trim()) {
-					handleLine(stream, lineBuf[stream]);
-					lineBuf[stream] = "";
-				}
-			}
-		};
-
+		const workspace = await this.ensureRoot();
 		this.stopping = false;
-		bridgeLog("starting REAL run", `cwd=${repoRoot}`, `cmd=${npmCmd} start`);
-		this.emit({ type: "log", line: `Starting real run in ${repoRoot}` });
-		this.emit({ type: "log", line: `Spawn: ${npmCmd} start` });
+		this.abort = new AbortController();
+		bridgeLog("starting REAL run (in-process)", `workspace=${workspace}`);
+		this.emit({ type: "log", line: `Starting real run in ${workspace}` });
 
 		this.setStatus({
 			state: "running",
@@ -567,89 +557,73 @@ export class AgentBridge {
 			fake: false,
 		});
 
-		this.child = spawn(npmCmd, ["start"], {
-			cwd: repoRoot,
-			env: {
-				...process.env,
-				PYTHONIOENCODING: "utf-8",
-				...(process.platform === "win32" ? { PYTHONUTF8: "1" } : {}),
-			},
-			windowsHide: true,
-			shell: process.platform === "win32",
-			detached: process.platform !== "win32",
-			stdio: ["ignore", "pipe", "pipe"],
-		});
-		bridgeLog("spawned child pid=", this.child.pid ?? "(none)");
+		const restoreLogs = this.installLogCapture();
+		const abort = this.abort;
 
-		this.child.stdout?.setEncoding("utf8");
-		this.child.stderr?.setEncoding("utf8");
-		this.child.stdout?.on("data", (chunk: string) => onChunk("stdout", chunk));
-		this.child.stderr?.on("data", (chunk: string) => onChunk("stderr", chunk));
-
-		this.child.on("error", (err) => {
-			bridgeError("child process error", err);
-			this.child = null;
-			this.stopping = false;
-			const message = `Spawn failed: ${err.message}`;
-			this.emit({ type: "log", line: message });
-			this.setStatus({
-				state: "failed",
-				message,
-				exitCode: 1,
-			});
-		});
-
-		this.child.on("close", (code, signal) => {
-			flushBuffers();
-			this.child = null;
-			const wasStopping = this.stopping;
-			this.stopping = false;
-			const exitCode = code ?? 1;
-			bridgeLog(
-				"child closed",
-				`exit=${code}`,
-				`signal=${signal ?? "(none)"}`,
-				`stopping=${wasStopping}`,
-				`recentLines=${recentLines.length}`,
-			);
-			if (wasStopping) {
+		this.runTask = (async () => {
+			try {
+				const code = await runPortfolio(workspace, {
+					signal: abort.signal,
+					onSpawn: (child) => {
+						this.child = child;
+						bridgeLog("harness child pid=", child.pid ?? "(none)");
+					},
+				});
+				const wasStopping = this.stopping;
+				this.child = null;
+				this.abort = null;
+				this.stopping = false;
+				if (wasStopping) {
+					this.setStatus({
+						state: "idle",
+						message: "Stopped mid-run",
+						exitCode: null,
+						fake: false,
+					});
+					return;
+				}
+				if (code !== 0) {
+					const message = `Run failed (exit ${code})`;
+					this.emit({ type: "log", line: message });
+					this.setStatus({
+						state: "failed",
+						message,
+						exitCode: code,
+					});
+					return;
+				}
 				this.setStatus({
 					state: "idle",
-					message: "Stopped mid-run",
-					exitCode: null,
-					fake: false,
+					message: "Run finished",
+					exitCode: code,
 				});
-				return;
-			}
-			if (exitCode !== 0) {
-				const tail = recentLines.slice(-8);
-				for (const line of tail) {
-					bridgeError("run tail:", line);
-				}
-				const detail = tail.length
-					? tail[tail.length - 1]
-					: "(no process output — check the Electron terminal for [auto-rob] logs)";
-				const message = `Run failed (exit ${exitCode}): ${detail}`;
-				this.emit({ type: "log", line: message });
-				if (tail.length > 1) {
-					this.emit({
-						type: "log",
-						line: `Last output:\n${tail.join("\n")}`,
+			} catch (err) {
+				this.child = null;
+				this.abort = null;
+				const wasStopping = this.stopping;
+				this.stopping = false;
+				if (wasStopping) {
+					this.setStatus({
+						state: "idle",
+						message: "Stopped mid-run",
+						exitCode: null,
+						fake: false,
 					});
+					return;
 				}
+				const message = err instanceof Error ? err.message : String(err);
+				bridgeError("runPortfolio failed", err);
+				this.emit({ type: "log", line: `ERROR: ${message}` });
 				this.setStatus({
 					state: "failed",
 					message,
-					exitCode,
+					exitCode: 1,
 				});
-				return;
+			} finally {
+				restoreLogs();
+				this.runTask = null;
 			}
-			this.setStatus({
-				state: "idle",
-				message: "Run finished",
-				exitCode,
-			});
-		});
+		})();
 
 		return this.getStatus();
 	}
@@ -666,23 +640,24 @@ export class AgentBridge {
 			return this.getStatus();
 		}
 
-		if (!this.child) {
+		if (!this.runTask && !this.child) {
 			return this.getStatus();
 		}
-		const child = this.child;
-		const pid = child.pid;
 		this.stopping = true;
-		bridgeLog("stopRun — killing process tree", `pid=${pid ?? "(none)"}`);
+		bridgeLog("stopRun — aborting in-process run");
 		this.emit({
 			type: "log",
-			line: `Stopping run (killing process tree pid=${pid ?? "?"})…`,
+			line: "Stopping run…",
 		});
 		this.setStatus({
 			state: "running",
 			message: "Stopping…",
 			fake: false,
 		});
-		killProcessTree(child);
+		this.abort?.abort();
+		if (this.child) {
+			killProcessTree(this.child);
+		}
 		return this.getStatus();
 	}
 }
