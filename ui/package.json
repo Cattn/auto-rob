@@ -4,6 +4,7 @@
   "description": "Electron Svelte",
   "private": true,
   "version": "0.0.1",
+  "license": "ISC",
   "type": "module",
   "main": ".vite/build/main.js",
   "author": {
