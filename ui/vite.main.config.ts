@@ -1,9 +1,10 @@
-import { builtinModules } from "node:module";
+import { builtinModules, createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const require = createRequire(import.meta.url);
 
 const builtins = [
   "electron",
@@ -22,6 +23,10 @@ export default defineConfig({
   resolve: {
     conditions: ["node"],
     mainFields: ["module", "jsnext:main", "jsnext"],
+    alias: {
+      "cross-spawn": path.dirname(require.resolve("cross-spawn/package.json")),
+      which: path.dirname(require.resolve("which/package.json")),
+    },
   },
   build: {
     outDir: ".vite/build",
