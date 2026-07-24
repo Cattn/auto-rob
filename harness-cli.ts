@@ -1,6 +1,4 @@
 import { writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   getActiveHarnessId,
   getHarness,
@@ -11,8 +9,8 @@ import {
   setHarnessModel,
   type HarnessId,
 } from "./harness/index.js";
+import { resolveCliWorkspace } from "./workspace.js";
 
-const root = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const command = args[0] ?? "list";
 
@@ -22,7 +20,7 @@ function flagValue(name: string): string | undefined {
   return undefined;
 }
 
-const workspace = flagValue("--root") ?? root;
+const workspace = flagValue("--root") ?? resolveCliWorkspace(import.meta.url);
 
 const JSON_MARKER = "__AUTO_ROB_JSON__";
 

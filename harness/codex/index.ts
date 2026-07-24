@@ -129,6 +129,11 @@ export function createCodexHarness(workspace: string): AgentHarness {
         stdio: ["ignore", "pipe", "pipe"],
       });
 
+      if (!child) {
+        throw new Error("Failed to spawn codex");
+      }
+      input.onSpawn?.(child);
+
       const state = { started: false, tools: 0, modelLabel: model };
       const buffer = { value: "" };
 
@@ -154,8 +159,22 @@ export function createCodexHarness(workspace: string): AgentHarness {
       });
 
       return new Promise<number>((resolve, reject) => {
-        child.on("error", reject);
+        const onAbort = () => {
+          child.kill();
+        };
+        if (input.signal) {
+          if (input.signal.aborted) {
+            onAbort();
+          } else {
+            input.signal.addEventListener("abort", onAbort, { once: true });
+          }
+        }
+        child.on("error", (err) => {
+          input.signal?.removeEventListener("abort", onAbort);
+          reject(err);
+        });
         child.on("close", (exitCode) => {
+          input.signal?.removeEventListener("abort", onAbort);
           if (buffer.value.trim()) {
             try {
               handleCodexEvent(JSON.parse(buffer.value) as CodexEvent, state);

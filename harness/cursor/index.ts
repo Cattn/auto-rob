@@ -201,6 +201,11 @@ export function createCursorHarness(workspace: string): AgentHarness {
         stdio: ["ignore", "pipe", "pipe"],
       });
 
+      if (!child) {
+        throw new Error("Failed to spawn cursor agent");
+      }
+      input.onSpawn?.(child);
+
       const state = { started: false, tools: 0, modelLabel: model };
       const buffer = { value: "" };
 
@@ -226,8 +231,22 @@ export function createCursorHarness(workspace: string): AgentHarness {
       });
 
       return new Promise<number>((resolve, reject) => {
-        child.on("error", reject);
+        const onAbort = () => {
+          child.kill();
+        };
+        if (input.signal) {
+          if (input.signal.aborted) {
+            onAbort();
+          } else {
+            input.signal.addEventListener("abort", onAbort, { once: true });
+          }
+        }
+        child.on("error", (err) => {
+          input.signal?.removeEventListener("abort", onAbort);
+          reject(err);
+        });
         child.on("close", (exitCode) => {
+          input.signal?.removeEventListener("abort", onAbort);
           if (buffer.value.trim()) {
             try {
               handleEvent(JSON.parse(buffer.value) as StreamEvent, state);

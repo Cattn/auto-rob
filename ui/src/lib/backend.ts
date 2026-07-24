@@ -4,7 +4,12 @@ import type {
 	HarnessId,
 	HarnessModels,
 	HealthInfo,
+	OnboardingAnswers,
+	OnboardingApplyResult,
+	OnboardingState,
+	PromptResetResult,
 	RunStatus,
+	TradeStyle,
 } from "../../shared/ipc";
 
 export type {
@@ -13,7 +18,12 @@ export type {
 	HarnessId,
 	HarnessModels,
 	HealthInfo,
+	OnboardingAnswers,
+	OnboardingApplyResult,
+	OnboardingState,
+	PromptResetResult,
 	RunStatus,
+	TradeStyle,
 };
 
 export function getBackend(): AutoRobApi | null {

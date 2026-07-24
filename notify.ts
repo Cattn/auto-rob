@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = path.dirname(fileURLToPath(import.meta.url));
+const packageRoot = path.dirname(fileURLToPath(import.meta.url));
 
 export const ENV_FILE = ".env";
 export const BRIEF_FILE = ".notify-brief.md";
@@ -15,9 +15,9 @@ export type NotifyOptions = {
   click?: string;
 };
 
-export async function loadEnvFile(): Promise<void> {
+export async function loadEnvFile(workspace = packageRoot): Promise<void> {
   try {
-    const raw = await readFile(path.join(root, ENV_FILE), "utf8");
+    const raw = await readFile(path.join(workspace, ENV_FILE), "utf8");
     for (const line of raw.split(/\r?\n/)) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
@@ -99,7 +99,7 @@ export async function readBriefFile(filePath: string): Promise<{
 }
 
 export async function sendBriefFile(
-  filePath = path.join(root, BRIEF_FILE),
+  filePath = path.join(packageRoot, BRIEF_FILE),
   options: NotifyOptions = {},
 ): Promise<boolean> {
   const brief = await readBriefFile(filePath);

@@ -1,3 +1,5 @@
+import type { ChildProcess } from "node:child_process";
+
 export type HarnessId = "cursor" | "codex";
 
 export type HarnessConnection = {
@@ -15,6 +17,8 @@ export type HarnessRunInput = {
   workspace: string;
   kickoff: string;
   promptPath: string;
+  signal?: AbortSignal;
+  onSpawn?: (child: ChildProcess) => void;
 };
 
 export type ConnectOptions = {
