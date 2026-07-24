@@ -62,7 +62,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "electron"
+      "electron",
+      "macos-alias"
     ]
   }
 }

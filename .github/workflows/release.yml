@@ -28,14 +28,23 @@ jobs:
           sudo apt-get install -y fakeroot dpkg rpm squashfs-tools
         working-directory: .
 
-      - name: Install WiX Toolset
+      - name: Setup WiX Toolset
         if: runner.os == 'Windows'
         shell: pwsh
         working-directory: .
         run: |
-          choco install wixtoolset --version=3.14.0 --yes
-          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
-          echo $wixBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $candle = Get-ChildItem "C:\Program Files (x86)\WiX Toolset*" -Recurse -Filter candle.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $candle) {
+            choco install wixtoolset --yes --no-progress
+            $candle = Get-ChildItem "C:\Program Files (x86)\WiX Toolset*" -Recurse -Filter candle.exe -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+          }
+          if (-not $candle) {
+            throw "WiX candle.exe not found"
+          }
+          echo $candle.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Using WiX at $($candle.DirectoryName)"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -51,6 +60,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Rebuild macOS DMG natives
+        if: runner.os == 'macOS'
+        run: pnpm rebuild macos-alias
 
       - name: Build installers
         run: pnpm run make
