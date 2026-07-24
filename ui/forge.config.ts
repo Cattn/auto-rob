@@ -15,7 +15,11 @@ const config: ForgeConfig = {
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ["darwin"]),
-    new MakerRpm({}),
+    new MakerRpm({
+      options: {
+        license: "ISC",
+      },
+    }),
     new MakerDeb({}),
   ],
   plugins: [

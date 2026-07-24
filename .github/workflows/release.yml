@@ -50,16 +50,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p ../release-assets
-          shopt -s globstar nullglob
-          for f in out/make/**/*.{exe,zip,dmg,deb,rpm}; do
-            [[ -f "$f" ]] || continue
-            # Skip Squirrel delta/full nupkg-adjacent helpers; keep Setup.exe only for Windows
-            base="$(basename "$f")"
-            if [[ "$base" == *.nupkg ]] || [[ "$base" == RELEASES ]]; then
-              continue
-            fi
-            cp "$f" "../release-assets/$base"
-          done
+          find out/make -type f \( \
+            -name '*.exe' -o \
+            -name '*.zip' -o \
+            -name '*.dmg' -o \
+            -name '*.deb' -o \
+            -name '*.rpm' \
+          \) -exec cp {} ../release-assets/ \;
           echo "Collected assets:"
           ls -la ../release-assets
 
