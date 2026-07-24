@@ -1,5 +1,4 @@
 import {
-  applyOnboardingDirect,
   applyOnboardingWithAgent,
   loadOnboarding,
   normalizeAnswers,
@@ -52,9 +51,7 @@ async function main() {
 
   if (command === "apply") {
     const answersRaw = hasFlag("--json") ? parseAnswersJson() : undefined;
-    const result = hasFlag("--agent")
-      ? await applyOnboardingWithAgent(workspace, answersRaw)
-      : await applyOnboardingDirect(workspace, answersRaw);
+    const result = await applyOnboardingWithAgent(workspace, answersRaw);
     emitJson({ result });
     if (!result.ok) process.exitCode = result.exitCode ?? 1;
     return;
@@ -67,7 +64,7 @@ async function main() {
   }
 
   throw new Error(
-    "Usage: onboarding-cli.ts <get|save|apply|reset-prompt> [--root <path>] [--json '{...}'] [--draft] [--agent]",
+    "Usage: onboarding-cli.ts <get|save|apply|reset-prompt> [--root <path>] [--json '{...}'] [--draft]",
   );
 }
 

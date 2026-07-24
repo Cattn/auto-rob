@@ -103,7 +103,7 @@ export type AutoRobApi = {
 	setHarnessModel: (id: HarnessId, model: string) => Promise<HarnessModels>;
 	getOnboarding: () => Promise<OnboardingState>;
 	saveOnboarding: (answers: OnboardingAnswers, opts?: { draft?: boolean }) => Promise<OnboardingState>;
-	applyOnboarding: (answers: OnboardingAnswers, opts?: { agent?: boolean }) => Promise<OnboardingApplyResult>;
+	applyOnboarding: (answers: OnboardingAnswers) => Promise<OnboardingApplyResult>;
 	resetPrompt: () => Promise<PromptResetResult>;
 	onRunEvent: (handler: (event: RunEvent) => void) => () => void;
 };

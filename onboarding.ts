@@ -37,9 +37,6 @@ export type OnboardingApplyResult = {
   exitCode: number | null;
 };
 
-const PREF_START = "<!-- auto-rob:onboarding-preferences:start -->";
-const PREF_END = "<!-- auto-rob:onboarding-preferences:end -->";
-
 export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   tradeStyle: "balanced",
   intent: "",
@@ -168,77 +165,6 @@ export function formatAnswersForPrompt(answers: OnboardingAnswers): string {
   return lines.join("\n");
 }
 
-export function buildPreferencesSection(answers: OnboardingAnswers): string {
-  return [
-    PREF_START,
-    "## User Preferences (from onboarding)",
-    "Standing preferences from the account owner. Treat as guidance alongside the goals above — do not ignore them, and do not invent tighter limits than stated.",
-    "",
-    formatAnswersForPrompt(answers),
-    PREF_END,
-  ].join("\n");
-}
-
-export function upsertPreferencesSection(
-  promptMd: string,
-  answers: OnboardingAnswers,
-): string {
-  const section = buildPreferencesSection(answers);
-  const start = promptMd.indexOf(PREF_START);
-  const end = promptMd.indexOf(PREF_END);
-  if (start >= 0 && end > start) {
-    const afterEnd = end + PREF_END.length;
-    const before = promptMd.slice(0, start).replace(/\s*$/, "\n\n");
-    const after = promptMd.slice(afterEnd).replace(/^\s*/, "\n\n");
-    return `${before}${section}${after}`.replace(/\n{3,}/g, "\n\n").trimEnd() +
-      "\n";
-  }
-
-  const goalsIdx = promptMd.search(/^## Goals\s*$/m);
-  if (goalsIdx >= 0) {
-    const before = promptMd.slice(0, goalsIdx).replace(/\s*$/, "\n\n");
-    const after = promptMd.slice(goalsIdx).replace(/^\s*/, "");
-    return `${before}${section}\n\n${after}`.replace(/\n{3,}/g, "\n\n");
-  }
-
-  return `${promptMd.trimEnd()}\n\n${section}\n`;
-}
-
-export async function applyOnboardingDirect(
-  workspace: string,
-  answersInput?: Partial<OnboardingAnswers>,
-): Promise<OnboardingApplyResult> {
-  const answers = normalizeAnswers(
-    answersInput ?? (await loadOnboarding(workspace)).answers,
-  );
-  const promptPath = path.join(workspace, PROMPT_FILE);
-  const current = await readFile(promptPath, "utf8");
-  const nextPrompt = upsertPreferencesSection(current, answers);
-  await writeFile(promptPath, nextPrompt, "utf8");
-
-  const prior = await loadOnboarding(workspace);
-  const state: OnboardingState = {
-    answers,
-    completedAt: prior.completedAt ?? new Date().toISOString(),
-    appliedAt: new Date().toISOString(),
-    applyMode: "direct",
-  };
-  await writeFile(
-    path.join(workspace, ONBOARDING_FILE),
-    `${JSON.stringify(state, null, 2)}\n`,
-    "utf8",
-  );
-
-  return {
-    ok: true,
-    mode: "direct",
-    state,
-    promptPath,
-    message: "Wrote User Preferences section into prompt.md",
-    exitCode: null,
-  };
-}
-
 export type PromptResetResult = {
   ok: boolean;
   promptPath: string;
@@ -278,32 +204,62 @@ export async function resetPromptToDefault(
   return { ok: true, promptPath, message: "prompt.md reset to stock default" };
 }
 
+export function isDefaultAnswers(answers: OnboardingAnswers): boolean {
+  return (
+    answers.tradeStyle === DEFAULT_ONBOARDING_ANSWERS.tradeStyle &&
+    answers.intent.trim() === "" &&
+    answers.minPerTradeUsd === null &&
+    answers.minBpToAddPosition === null
+  );
+}
+
 export function buildOnboardingAgentKickoff(
   answers: OnboardingAnswers,
 ): string {
-  return [
+  const header = [
     "You are editing auto-rob's standing agent instructions.",
-    "Your only job: update prompt.md so it reflects the owner's onboarding preferences below.",
-    "Do not trade. Do not call Robinhood write tools. Do not modify run-log.md, long-term.md, notes.md, or onboarding.json.",
-    "Keep the existing structure and safety rules in prompt.md. Prefer editing Goals / Workflow language and the existing User Preferences section rather than rewriting the whole file.",
-    "If a User Preferences (from onboarding) section exists, refine it so the rest of the prompt is consistent with it.",
-    "Be concrete about cadence, sizing floors, and intent. Do not invent dollar limits the owner did not provide.",
-    "",
-    "Owner preferences:",
-    formatAnswersForPrompt(answers),
-    "",
-    "Edit prompt.md now, then stop.",
-  ].join("\n");
+    "This is NOT a portfolio run and NOT a trading kickoff.",
+    "Your only job: read prompt.md, then edit it to reflect the owner's onboarding preferences.",
+    "Do not trade. Do not call any Robinhood write tools. Do not modify run-log.md, long-term.md, notes.md, or onboarding.json.",
+    "Keep the existing structure and safety rules in prompt.md.",
+  ];
+
+  if (isDefaultAnswers(answers)) {
+    header.push(
+      "",
+      "The owner left all preferences at their defaults (balanced cadence, no intent, no sizing limits).",
+      "Change as little as possible — leave the stock prompt alone unless something is clearly wrong or stale.",
+      "If a User Preferences section already exists and is reasonable, leave it intact.",
+    );
+  } else {
+    header.push(
+      "",
+      "Weave the following preferences into Goals/Workflow and the User Preferences section.",
+      "Be concrete about cadence, sizing floors, and intent. Do not invent dollar limits the owner did not provide.",
+      "If a User Preferences (from onboarding) section exists, refine it so the rest of the prompt is consistent with it.",
+      "",
+      "Owner preferences:",
+      formatAnswersForPrompt(answers),
+    );
+  }
+
+  header.push("", "Read prompt.md, edit it, then stop.");
+  return header.join("\n");
 }
 
 export async function applyOnboardingWithAgent(
   workspace: string,
   answersInput?: Partial<OnboardingAnswers>,
 ): Promise<OnboardingApplyResult> {
-  const direct = await applyOnboardingDirect(workspace, answersInput);
-  const answers = direct.state.answers;
-  const kickoff = buildOnboardingAgentKickoff(answers);
+  const prior = await loadOnboarding(workspace);
+  const answers = normalizeAnswers(answersInput ?? prior.answers);
   const promptPath = path.join(workspace, PROMPT_FILE);
+
+  const savedState = await saveOnboarding(workspace, answers, {
+    markCompleted: true,
+  });
+
+  const kickoff = buildOnboardingAgentKickoff(answers);
 
   const activeId = await getActiveHarnessId(workspace);
   const harness = await getActiveHarness(workspace);
@@ -316,7 +272,7 @@ export async function applyOnboardingWithAgent(
   });
 
   const state: OnboardingState = {
-    ...direct.state,
+    ...savedState,
     appliedAt: new Date().toISOString(),
     applyMode: "agent",
   };
@@ -334,7 +290,7 @@ export async function applyOnboardingWithAgent(
     message:
       exitCode === 0
         ? "Agent finished refining prompt.md from onboarding answers"
-        : `Agent apply failed (exit ${exitCode}); direct preferences section was still written`,
+        : `Agent apply failed (exit ${exitCode})`,
     exitCode,
   };
 }

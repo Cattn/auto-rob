@@ -15,8 +15,8 @@ const api: AutoRobApi = {
 	getOnboarding: () => ipcRenderer.invoke(IPC.onboardingGet),
 	saveOnboarding: (answers: OnboardingAnswers, opts?: { draft?: boolean }) =>
 		ipcRenderer.invoke(IPC.onboardingSave, answers, opts),
-	applyOnboarding: (answers: OnboardingAnswers, opts?: { agent?: boolean }) =>
-		ipcRenderer.invoke(IPC.onboardingApply, answers, opts),
+	applyOnboarding: (answers: OnboardingAnswers) =>
+		ipcRenderer.invoke(IPC.onboardingApply, answers),
 	resetPrompt: () => ipcRenderer.invoke(IPC.promptReset),
 	getHarnessModels: () => ipcRenderer.invoke(IPC.harnessModels),
 	setHarnessModel: (id: HarnessId, model: string) =>
