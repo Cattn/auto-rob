@@ -226,6 +226,7 @@ export type PromptResetResult = {
   ok: boolean;
   promptPath: string;
   message: string;
+  state: OnboardingState;
 };
 
 export async function resetPromptToDefault(
@@ -244,21 +245,25 @@ export async function resetPromptToDefault(
   const promptPath = path.join(workspace, PROMPT_FILE);
   await writeFile(promptPath, defaultContent, "utf8");
 
-  try {
-    const raw = await readFile(path.join(workspace, ONBOARDING_FILE), "utf8");
-    const state = JSON.parse(raw) as Record<string, unknown>;
-    state.appliedAt = null;
-    state.applyMode = null;
-    await writeFile(
-      path.join(workspace, ONBOARDING_FILE),
-      `${JSON.stringify(state, null, 2)}\n`,
-      "utf8",
-    );
-  } catch {
-    // onboarding.json missing or invalid — skip
-  }
+  const now = new Date().toISOString();
+  const state: OnboardingState = {
+    answers: { ...DEFAULT_ONBOARDING_ANSWERS },
+    completedAt: now,
+    appliedAt: now,
+    applyMode: "direct",
+  };
+  await writeFile(
+    path.join(workspace, ONBOARDING_FILE),
+    `${JSON.stringify(state, null, 2)}\n`,
+    "utf8",
+  );
 
-  return { ok: true, promptPath, message: "prompt.md reset to stock default" };
+  return {
+    ok: true,
+    promptPath,
+    message: "prompt.md reset to stock default",
+    state,
+  };
 }
 
 export function isDefaultAnswers(answers: OnboardingAnswers): boolean {
@@ -315,6 +320,39 @@ export async function applyOnboardingWithAgent(
   const savedState = await saveOnboarding(workspace, answers, {
     markCompleted: true,
   });
+
+  if (isDefaultAnswers(answers)) {
+    const defaultPath = path.join(workspace, DEFAULT_PROMPT_FILE);
+    let defaultContent: string;
+    try {
+      defaultContent = await readFile(defaultPath, "utf8");
+    } catch {
+      throw new Error(
+        `Missing ${DEFAULT_PROMPT_FILE} at ${defaultPath} — cannot apply defaults`,
+      );
+    }
+    await writeFile(promptPath, defaultContent, "utf8");
+
+    const state: OnboardingState = {
+      ...savedState,
+      appliedAt: new Date().toISOString(),
+      applyMode: "direct",
+    };
+    await writeFile(
+      path.join(workspace, ONBOARDING_FILE),
+      `${JSON.stringify(state, null, 2)}\n`,
+      "utf8",
+    );
+
+    return {
+      ok: true,
+      mode: "direct",
+      state,
+      promptPath,
+      message: "Using stock prompt.md — no preference changes to apply",
+      exitCode: 0,
+    };
+  }
 
   const taskPath = path.join(workspace, ONBOARDING_TASK_FILE);
   await writeFile(taskPath, buildOnboardingTaskMarkdown(answers), "utf8");
