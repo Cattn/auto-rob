@@ -63,7 +63,7 @@ jobs:
 
       - name: Rebuild macOS DMG natives
         if: runner.os == 'macOS'
-        run: pnpm rebuild macos-alias
+        run: pnpm rebuild macos-alias fs-xattr
 
       - name: Build installers
         run: pnpm run make
