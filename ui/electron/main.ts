@@ -1,12 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
-import started from "electron-squirrel-startup";
 import { AgentBridge } from "./agent-bridge";
 import { IPC } from "../shared/ipc";
-
-if (started) {
-	app.quit();
-}
 
 const runOnce = process.argv.includes("--run-once");
 const bridge = new AgentBridge();

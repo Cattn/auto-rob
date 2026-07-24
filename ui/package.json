@@ -28,8 +28,7 @@
     "@electron-forge/maker-deb": "^7.11.1",
     "@electron-forge/maker-dmg": "^7.11.1",
     "@electron-forge/maker-rpm": "^7.11.1",
-    "@electron-forge/maker-squirrel": "^7.11.1",
-    "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/maker-wix": "^7.11.1",
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron-forge/plugin-vite": "^7.11.1",
@@ -43,7 +42,6 @@
     "@tailwindcss/vite": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
-    "@types/electron-squirrel-startup": "^1.0.2",
     "@types/node": "^25.3.0",
     "electron": "^40.6.0",
     "jsdom": "^28.1.0",
@@ -58,14 +56,12 @@
   },
   "dependencies": {
     "cross-spawn": "^7.0.6",
-    "electron-squirrel-startup": "^1.0.1",
     "which": "^6.0.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "electron",
-      "electron-winstaller"
+      "electron"
     ]
   }
 }

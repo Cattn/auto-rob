@@ -28,6 +28,15 @@ jobs:
           sudo apt-get install -y fakeroot dpkg rpm
         working-directory: .
 
+      - name: Install WiX Toolset
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: .
+        run: |
+          choco install wixtoolset --version=3.14.0 --yes
+          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+          echo $wixBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -51,8 +60,7 @@ jobs:
         run: |
           mkdir -p ../release-assets
           find out/make -type f \( \
-            -name '*.exe' -o \
-            -name '*.zip' -o \
+            -name '*.msi' -o \
             -name '*.dmg' -o \
             -name '*.deb' -o \
             -name '*.rpm' \
