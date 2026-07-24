@@ -1,7 +1,9 @@
 import { runPortfolio } from "./run.js";
-import { resolveCliWorkspace } from "./workspace.js";
+import { prepareCliWorkspace } from "./workspace.js";
+import { loadEnvFile } from "./notify.js";
 
-const root = resolveCliWorkspace(import.meta.url);
+const root = await prepareCliWorkspace(import.meta.url);
+await loadEnvFile(root);
 
 runPortfolio(root)
   .then((code) => {

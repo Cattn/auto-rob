@@ -21,10 +21,19 @@ Supports two harnesses — **Cursor** or **ChatGPT (Codex)** — with one active
 git clone https://github.com/<you>/auto-rob.git
 cd auto-rob
 npm install
-cp .env.example .env
 ```
 
-Edit `.env` if you want push notifications (`NTFY_*` is optional — leave blank to skip):
+Agent state lives in an OS user-data **workspace** (not the git checkout):
+
+| OS | Default path |
+| --- | --- |
+| Windows | `%APPDATA%\auto-rob\workspace` |
+| macOS | `~/Library/Application Support/auto-rob/workspace` |
+| Linux | `~/.config/auto-rob/workspace` |
+
+Override with `AUTO_ROB_WORKSPACE` if needed. On first CLI or UI start, stock defaults are seeded there (without overwriting existing files). Existing clones also get a one-time copy of repo-root files into that folder when the destination file is missing.
+
+Edit the workspace `.env` for push notifications (`NTFY_*` is optional — leave blank to skip):
 
 ```
 NTFY_URL=https://ntfy.example.com
@@ -33,6 +42,14 @@ NTFY_TOKEN=your-token
 ```
 
 Self-host guide: [docs.ntfy.sh/install](https://docs.ntfy.sh/install/). Create a topic, add a token if you use auth, then subscribe in the ntfy app.
+
+### Migrating from a repo-root workspace
+
+If you previously edited files in the git clone (`prompt.md`, `notes.md`, `.env`, `auto-rob.config.json`, etc.):
+
+1. Run `npm start` or open the UI once — missing workspace files are copied from the repo automatically.
+2. Or copy them yourself into the user-data workspace path above.
+3. Prefer editing the **workspace** copies going forward; the repo copies are templates/defaults for new installs.
 
 ### Connect harnesses (recommended: UI)
 
@@ -55,7 +72,7 @@ npm run codex:connect    # codex mcp add + mcp login
 npm run harness:list     # status for both harnesses
 ```
 
-Optional files you can edit:
+Optional files in the **workspace** folder:
 
 | File | Purpose |
 | --- | --- |
@@ -64,6 +81,7 @@ Optional files you can edit:
 | `long-term.md` | Durable goals/watches (agent-maintained) |
 | `run-log.md` | Per-run continuity log (agent-maintained) |
 | `auto-rob.config.json` | Active harness (`cursor` \| `codex`) |
+| `.env` | Optional ntfy + path overrides |
 | `.cursor/cli.json` | Cursor CLI allowlist |
 | `.cursor/permissions.json` | IDE allowlist for the same tools |
 
@@ -74,7 +92,7 @@ Cursor Robinhood MCP is expected in the **global** `~/.cursor/mcp.json` (not a p
 npm start
 ```
 
-Uses the harness selected in `auto-rob.config.json` (override with `AUTO_ROB_HARNESS=codex` if needed).
+Uses the harness selected in the workspace `auto-rob.config.json` (override with `AUTO_ROB_HARNESS=codex` if needed).
 
 Check harness CLIs:
 
@@ -115,11 +133,11 @@ After `npm run make` / installing the app, point Task Scheduler or cron at the p
    - Arguments: `--run-once`
    - Start in: can be left blank
 
-Workspace files (`prompt.md`, notes, config, logs) live under the OS user-data folder (e.g. `%APPDATA%/electron-svelte/workspace` on Windows). Override with `AUTO_ROB_WORKSPACE` if needed.
+Workspace files (`prompt.md`, notes, config, logs, `.env`) live under the OS user-data folder (same path for CLI and Electron — see Setup). Override with `AUTO_ROB_WORKSPACE` if needed.
 
 ### Dev clone (`npm start`)
 
-**Windows (Task Scheduler)** — Program `npm` / `npm.cmd`, Arguments `start`, Start in = this repo.
+**Windows (Task Scheduler)** — Program `npm` / `npm.cmd`, Arguments `start`, Start in = this repo. State still writes to the user-data workspace above.
 
 **Linux (cron)**
 
@@ -142,4 +160,4 @@ The first line covers 9:30, 11:30, 1:30, 3:30. The second is an optional ~5:00 P
 
 ## Notes
 
-This places real orders on your funded Agentic account. Review `prompt.md` before enabling a schedule, and keep MCP auth valid for the active harness so unattended runs can use the Robinhood tools. Cursor and Codex each need their own Robinhood OAuth connect.
+This places real orders on your funded Agentic account. Review the workspace `prompt.md` before enabling a schedule, and keep MCP auth valid for the active harness so unattended runs can use the Robinhood tools. Cursor and Codex each need their own Robinhood OAuth connect.

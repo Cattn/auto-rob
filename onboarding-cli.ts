@@ -6,7 +6,7 @@ import {
   saveOnboarding,
   type OnboardingAnswers,
 } from "./onboarding.js";
-import { resolveCliWorkspace } from "./workspace.js";
+import { prepareCliWorkspace } from "./workspace.js";
 
 const args = process.argv.slice(2);
 const command = args[0] ?? "get";
@@ -21,7 +21,6 @@ function hasFlag(name: string): boolean {
   return args.includes(name);
 }
 
-const workspace = flagValue("--root") ?? resolveCliWorkspace(import.meta.url);
 const JSON_MARKER = "__AUTO_ROB_JSON__";
 
 function emitJson(payload: unknown) {
@@ -35,6 +34,11 @@ function parseAnswersJson(): Partial<OnboardingAnswers> {
 }
 
 async function main() {
+  const workspace = await prepareCliWorkspace(
+    import.meta.url,
+    flagValue("--root"),
+  );
+
   if (command === "get") {
     emitJson({ state: await loadOnboarding(workspace) });
     return;

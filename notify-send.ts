@@ -1,6 +1,5 @@
 import { unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   BRIEF_FILE,
   isNtfyConfigured,
@@ -9,8 +8,7 @@ import {
   readBriefFile,
   SENT_MARKER,
 } from "./notify.js";
-
-const root = path.dirname(fileURLToPath(import.meta.url));
+import { prepareCliWorkspace } from "./workspace.js";
 
 function parseArgs(argv: string[]) {
   let title: string | null = null;
@@ -41,7 +39,7 @@ function parseArgs(argv: string[]) {
           "  npm run notify -- --file .notify-brief.md",
           "  npm run notify",
           "",
-          `Default file: ${BRIEF_FILE}`,
+          `Default file: ${BRIEF_FILE} (in the user-data workspace)`,
           "Brief file format:",
           "  # title on first heading line",
           "  body lines after that",
@@ -63,8 +61,9 @@ function parseArgs(argv: string[]) {
 }
 
 async function main() {
+  const root = await prepareCliWorkspace(import.meta.url);
   const args = parseArgs(process.argv.slice(2));
-  await loadEnvFile();
+  await loadEnvFile(root);
 
   if (!isNtfyConfigured()) {
     process.exit(0);
@@ -94,11 +93,13 @@ async function main() {
 
   await writeFile(path.join(root, SENT_MARKER), new Date().toISOString(), "utf8");
   console.log(`Sent - ${title}`);
+  return root;
 }
 
 main().catch(async (err) => {
   console.error(err instanceof Error ? err.message : err);
   try {
+    const root = await prepareCliWorkspace(import.meta.url);
     await unlink(path.join(root, SENT_MARKER));
   } catch {
     // ignore

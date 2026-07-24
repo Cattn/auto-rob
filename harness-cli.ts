@@ -9,7 +9,7 @@ import {
   setHarnessModel,
   type HarnessId,
 } from "./harness/index.js";
-import { resolveCliWorkspace } from "./workspace.js";
+import { prepareCliWorkspace } from "./workspace.js";
 
 const args = process.argv.slice(2);
 const command = args[0] ?? "list";
@@ -20,8 +20,6 @@ function flagValue(name: string): string | undefined {
   return undefined;
 }
 
-const workspace = flagValue("--root") ?? resolveCliWorkspace(import.meta.url);
-
 const JSON_MARKER = "__AUTO_ROB_JSON__";
 
 function emitJson(payload: unknown) {
@@ -29,6 +27,11 @@ function emitJson(payload: unknown) {
 }
 
 async function main() {
+  const workspace = await prepareCliWorkspace(
+    import.meta.url,
+    flagValue("--root"),
+  );
+
   if (command === "list") {
     const statuses = await listHarnessStatuses(workspace);
     emitJson({ statuses });
