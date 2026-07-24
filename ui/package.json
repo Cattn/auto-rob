@@ -63,7 +63,8 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "electron",
-      "macos-alias"
+      "macos-alias",
+      "fs-xattr"
     ]
   }
 }
