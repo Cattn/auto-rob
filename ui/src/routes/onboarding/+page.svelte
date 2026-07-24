@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { Button } from 'm3-svelte';
 	import { getBackend } from '$lib/backend';
 	import type { OnboardingAnswers, OnboardingState, TradeStyle } from '$lib/backend';
@@ -23,6 +26,10 @@
 	let statusMsg = $state<string | null>(null);
 	let statusOk = $state(true);
 	let state = $state<OnboardingState | null>(null);
+
+	const editMode = $derived(
+		page.url.searchParams.has('edit') || Boolean(state?.completedAt),
+	);
 
 	function parseOptionalUsd(raw: string | number | null | undefined): number | null {
 		if (raw === null || raw === undefined || raw === '') return null;
@@ -63,7 +70,7 @@
 		try {
 			const next = await api.saveOnboarding(buildAnswers(), { draft: true });
 			applyState(next);
-			setStatus('Draft saved.', true);
+			setStatus(editMode ? 'Changes saved as draft.' : 'Draft saved.', true);
 		} catch (err) {
 			setStatus(err instanceof Error ? err.message : String(err), false);
 		} finally {
@@ -76,10 +83,14 @@
 		if (!api || applying) return;
 		applying = true;
 		statusMsg = null;
+		const wasEdit = editMode;
 		try {
 			const result = await api.applyOnboarding(buildAnswers());
 			applyState(result.state);
 			setStatus(result.message, result.ok);
+			if (result.ok) {
+				void goto(resolve(wasEdit ? '/settings' : '/'));
+			}
 		} catch (err) {
 			setStatus(err instanceof Error ? err.message : String(err), false);
 		} finally {
@@ -100,6 +111,7 @@
 		statusMsg = null;
 		try {
 			const result = await api.resetPrompt();
+			applyState(result.state);
 			setStatus(result.message, result.ok);
 		} catch (err) {
 			setStatus(err instanceof Error ? err.message : String(err), false);
@@ -128,25 +140,52 @@
 	});
 </script>
 
-<title>Onboarding · auto-rob</title>
+<title>{editMode ? 'Edit preferences' : 'Onboarding'} · auto-rob</title>
 
 <main
 	class="bg-background text-on-background flex min-h-dvh w-full justify-center px-6 pt-12 pb-28"
 >
 	<div class="w-full max-w-2xl">
+		{#if editMode}
+			<div class="mb-6">
+				<Button
+					variant="text"
+					disabled={saving || applying}
+					click={() => goto(resolve('/settings'))}
+				>
+					← Back to settings
+				</Button>
+			</div>
+		{/if}
+
 		<header>
-			<p
-				class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase"
-			>
-				Onboarding
-			</p>
-			<h1 class="text-on-surface mt-1 text-3xl font-bold tracking-tight">
-				Your preferences
-			</h1>
-			<p class="text-on-surface-variant mt-2 max-w-xl text-sm leading-relaxed">
-				Tell the agent how you want it to trade. These preferences are written into
-				prompt.md as standing instructions.
-			</p>
+			{#if editMode}
+				<p
+					class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase"
+				>
+					Settings
+				</p>
+				<h1 class="text-on-surface mt-1 text-3xl font-bold tracking-tight">
+					Edit preferences
+				</h1>
+				<p class="text-on-surface-variant mt-2 max-w-xl text-sm leading-relaxed">
+					Update trade cadence, focus, and sizing limits. Saving & applying rewrites the
+					standing instructions in prompt.md.
+				</p>
+			{:else}
+				<p
+					class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase"
+				>
+					Onboarding
+				</p>
+				<h1 class="text-on-surface mt-1 text-3xl font-bold tracking-tight">
+					Your preferences
+				</h1>
+				<p class="text-on-surface-variant mt-2 max-w-xl text-sm leading-relaxed">
+					Tell the agent how you want it to trade. These preferences are written into
+					prompt.md as standing instructions.
+				</p>
+			{/if}
 		</header>
 
 		{#if loadError}
@@ -195,15 +234,28 @@
 				</section>
 
 				<section aria-label="Intent">
-					<div class="mb-3">
-						<h2
-							class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase"
+					<div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+						<div class="min-w-0">
+							<h2
+								class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase"
+							>
+								Intent / focus
+							</h2>
+							<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+								{#if editMode}
+									Revise what the agent should focus on — sectors, strategies, or goals.
+								{:else}
+									Describe what you want the agent to focus on — sectors, strategies, or goals.
+								{/if}
+							</p>
+						</div>
+						<Button
+							variant="text"
+							disabled={saving || applying || resetting}
+							click={resetPrompt}
 						>
-							Intent / focus
-						</h2>
-						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
-							Describe what you want the agent to focus on — sectors, strategies, or goals.
-						</p>
+							{resetting ? 'Resetting…' : 'Reset prompt to default'}
+						</Button>
 					</div>
 					<textarea
 						class="bg-surface-container-high text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary w-full rounded-xl px-4 py-3 text-sm leading-relaxed outline-none ring-1 focus:ring-2"
@@ -281,14 +333,11 @@
 						disabled={saving || applying}
 						click={saveAndApply}
 					>
-						{applying ? 'Running agent…' : 'Save & apply'}
-					</Button>
-					<Button
-						variant="outlined"
-						disabled={saving || applying || resetting}
-						click={resetPrompt}
-					>
-						{resetting ? 'Resetting…' : 'Reset prompt to default'}
+						{applying
+							? 'Running agent…'
+							: editMode
+								? 'Save & apply changes'
+								: 'Save & apply'}
 					</Button>
 				</section>
 

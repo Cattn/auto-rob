@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Button } from 'm3-svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { Button, Checkbox } from 'm3-svelte';
 	import { getBackend } from '$lib/backend';
 	import type {
 		HarnessConnection,
@@ -70,7 +72,7 @@
 	}
 
 	function modelHint(id: HarnessId): string {
-		if (id === 'cursor') return 'e.g. grok-4.5[effort=high,fast=true]';
+		if (id === 'cursor') return 'Leave blank for Cursor default';
 		return 'Leave blank for Codex default';
 	}
 
@@ -194,7 +196,8 @@
 			<p class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">Settings</p>
 			<h1 class="text-on-surface mt-1 text-3xl font-bold tracking-tight">Agent & harness</h1>
 			<p class="text-on-surface-variant mt-2 max-w-xl text-sm leading-relaxed">
-				Connection health, harness install, phone notifications, models, and which agent runs next.
+				Connection health, trading preferences, harness install, phone notifications, models, and
+				which agent runs next.
 			</p>
 		</header>
 
@@ -202,6 +205,37 @@
 			<p class="text-error mt-6 text-sm">{loadError}</p>
 		{:else}
 			<div class="mt-8 flex flex-col gap-8">
+				<section aria-label="Trading preferences">
+					<div class="mb-3">
+						<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
+							Trading preferences
+						</h2>
+						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+							Edit cadence, intent, and sizing limits written into prompt.md.
+						</p>
+					</div>
+					<div
+						class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
+					>
+						<div class="flex items-center justify-between gap-3 px-4 py-3.5">
+							<div class="min-w-0">
+								<p class="text-on-surface text-sm font-medium">Prompt preferences</p>
+								<p class="text-on-surface-variant mt-0.5 text-sm">
+									Change standing instructions for how the agent trades
+								</p>
+							</div>
+							<Button
+								variant="tonal"
+								click={() => {
+									void goto(`${resolve('/onboarding')}?edit=1`);
+								}}
+							>
+								Edit
+							</Button>
+						</div>
+					</div>
+				</section>
+
 				<section aria-label="Harnesses">
 					<div class="mb-3">
 						<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
@@ -336,6 +370,59 @@
 					{/if}
 				</section>
 
+				<section aria-label="Models">
+					<div class="mb-3">
+						<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
+							Models
+						</h2>
+						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+							Per-harness model id used on the next run.
+						</p>
+					</div>
+
+					{#if harnesses.length === 0}
+						<div class="bg-surface-container-high ring-outline/50 rounded-xl p-4 ring-1">
+							<p class="text-on-surface-variant text-sm">Loading…</p>
+						</div>
+					{:else}
+						<div
+							class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
+						>
+							{#each harnesses as h (h.id)}
+								<div class="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+									<label class="min-w-0" for={`model-${h.id}`}>
+										<span class="text-on-surface block text-sm font-medium">{h.label}</span>
+										<span class="text-on-surface-variant mt-0.5 block text-sm">
+											{modelHint(h.id)}
+										</span>
+									</label>
+									<div class="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:min-w-[16rem]">
+										<input
+											id={`model-${h.id}`}
+											class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary min-w-0 flex-1 rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+											type="text"
+											placeholder={modelHint(h.id)}
+											bind:value={draftModels[h.id]}
+											disabled={savingModelId !== null}
+											onkeydown={(e) => {
+												if (e.key === 'Enter') void saveModel(h.id);
+											}}
+										/>
+										<Button
+											variant="tonal"
+											disabled={savingModelId !== null ||
+												(draftModels[h.id] ?? '') === (models[h.id] ?? '')}
+											click={() => saveModel(h.id)}
+										>
+											{savingModelId === h.id ? 'Saving…' : 'Save'}
+										</Button>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</section>
+
 				<section aria-label="Phone notifications">
 					<div class="mb-3">
 						<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
@@ -398,15 +485,22 @@
 						</label>
 
 						{#if ntfy?.tokenConfigured}
-							<label class="text-on-surface-variant flex items-center gap-2 text-sm">
-								<input
-									type="checkbox"
-									bind:checked={clearNtfyToken}
-									disabled={savingNtfy}
-									onchange={() => {
-										if (clearNtfyToken) draftNtfy.token = '';
-									}}
-								/>
+							<label
+								class={[
+									'text-on-surface flex items-center gap-3 text-sm',
+									savingNtfy ? 'opacity-60' : 'cursor-pointer'
+								]}
+							>
+								<Checkbox>
+									<input
+										type="checkbox"
+										bind:checked={clearNtfyToken}
+										disabled={savingNtfy}
+										onchange={() => {
+											if (clearNtfyToken) draftNtfy.token = '';
+										}}
+									/>
+								</Checkbox>
 								Clear saved access token
 							</label>
 						{/if}
@@ -435,59 +529,6 @@
 							<p class="text-on-surface-variant text-sm leading-relaxed">{ntfyMessage}</p>
 						{/if}
 					</div>
-				</section>
-
-				<section aria-label="Models">
-					<div class="mb-3">
-						<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
-							Models
-						</h2>
-						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
-							Per-harness model id used on the next run.
-						</p>
-					</div>
-
-					{#if harnesses.length === 0}
-						<div class="bg-surface-container-high ring-outline/50 rounded-xl p-4 ring-1">
-							<p class="text-on-surface-variant text-sm">Loading…</p>
-						</div>
-					{:else}
-						<div
-							class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
-						>
-							{#each harnesses as h (h.id)}
-								<div class="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-									<label class="min-w-0" for={`model-${h.id}`}>
-										<span class="text-on-surface block text-sm font-medium">{h.label}</span>
-										<span class="text-on-surface-variant mt-0.5 block text-sm">
-											{modelHint(h.id)}
-										</span>
-									</label>
-									<div class="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:min-w-[16rem]">
-										<input
-											id={`model-${h.id}`}
-											class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary min-w-0 flex-1 rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
-											type="text"
-											placeholder={modelHint(h.id)}
-											bind:value={draftModels[h.id]}
-											disabled={savingModelId !== null}
-											onkeydown={(e) => {
-												if (e.key === 'Enter') void saveModel(h.id);
-											}}
-										/>
-										<Button
-											variant="tonal"
-											disabled={savingModelId !== null ||
-												(draftModels[h.id] ?? '') === (models[h.id] ?? '')}
-											click={() => saveModel(h.id)}
-										>
-											{savingModelId === h.id ? 'Saving…' : 'Save'}
-										</Button>
-									</div>
-								</div>
-							{/each}
-						</div>
-					{/if}
 				</section>
 
 				<section aria-label="Connection info">
@@ -556,18 +597,6 @@
 									</span>
 								</div>
 							{/if}
-
-							<div class="flex items-center justify-between gap-4 px-3 py-2.5">
-								<div class="min-w-0">
-									<p class="text-on-surface text-xs font-medium">Runs</p>
-									<p class="text-on-surface-variant mt-0.5 text-xs">Execution mode for agent runs</p>
-								</div>
-								<span
-									class="bg-primary/15 text-primary shrink-0 rounded-md px-2 py-0.5 text-xs font-medium"
-								>
-									{health.fakeRuns ? 'fake / dry-run' : 'REAL agent'}
-								</span>
-							</div>
 
 							<div class="flex items-center justify-between gap-4 px-3 py-2.5">
 								<div class="min-w-0">

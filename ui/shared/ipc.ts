@@ -48,6 +48,7 @@ export type PromptResetResult = {
 	ok: boolean;
 	promptPath: string;
 	message: string;
+	state: OnboardingState;
 };
 
 export type RunState = "idle" | "running" | "failed";
