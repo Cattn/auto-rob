@@ -1,0 +1,11 @@
+{
+  "answers": {
+    "tradeStyle": "balanced",
+    "intent": "",
+    "minPerTradeUsd": null,
+    "minBpToAddPosition": null
+  },
+  "completedAt": null,
+  "appliedAt": null,
+  "applyMode": null
+}

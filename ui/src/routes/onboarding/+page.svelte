@@ -63,13 +63,13 @@
 		}
 	}
 
-	async function saveAndApply(agent: boolean) {
+	async function saveAndApply() {
 		const api = getBackend();
 		if (!api || applying) return;
 		applying = true;
 		statusMsg = null;
 		try {
-			const result = await api.applyOnboarding(buildAnswers(), { agent });
+			const result = await api.applyOnboarding(buildAnswers());
 			applyState(result.state);
 			setStatus(result.message, result.ok);
 		} catch (err) {
@@ -271,16 +271,9 @@
 					<Button
 						variant="filled"
 						disabled={saving || applying}
-						click={() => saveAndApply(false)}
+						click={saveAndApply}
 					>
-						{applying ? 'Applying…' : 'Save & apply'}
-					</Button>
-					<Button
-						variant="outlined"
-						disabled={saving || applying}
-						click={() => saveAndApply(true)}
-					>
-						{applying ? 'Running agent…' : 'Apply with agent'}
+						{applying ? 'Running agent…' : 'Save & apply'}
 					</Button>
 					<Button
 						variant="outlined"

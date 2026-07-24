@@ -25,7 +25,6 @@ import {
 	setHarnessModel,
 } from "../../harness/index";
 import {
-	applyOnboardingDirect,
 	applyOnboardingWithAgent,
 	loadOnboarding,
 	normalizeAnswers,
@@ -325,14 +324,10 @@ export class AgentBridge {
 
 	async applyOnboarding(
 		answers: OnboardingAnswers,
-		opts?: { agent?: boolean },
 	): Promise<OnboardingApplyResult> {
 		const workspace = await this.ensureRoot();
 		const normalized = normalizeAnswers(answers);
-		if (opts?.agent) {
-			return applyOnboardingWithAgent(workspace, normalized);
-		}
-		return applyOnboardingDirect(workspace, normalized);
+		return applyOnboardingWithAgent(workspace, normalized);
 	}
 
 	async resetPrompt(): Promise<PromptResetResult> {

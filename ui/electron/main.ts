@@ -51,8 +51,8 @@ function registerIpc() {
 	ipcMain.handle(IPC.onboardingSave, (_event, answers, opts) =>
 		bridge.saveOnboarding(answers, opts),
 	);
-	ipcMain.handle(IPC.onboardingApply, (_event, answers, opts) =>
-		bridge.applyOnboarding(answers, opts),
+	ipcMain.handle(IPC.onboardingApply, (_event, answers) =>
+		bridge.applyOnboarding(answers),
 	);
 	ipcMain.handle(IPC.promptReset, () => bridge.resetPrompt());
 	ipcMain.handle(IPC.harnessModels, () => bridge.getHarnessModels());
