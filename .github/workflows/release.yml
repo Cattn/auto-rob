@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot dpkg rpm
+        working-directory: .
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build installers
+        run: pnpm run make
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p ../release-assets
+          shopt -s globstar nullglob
+          for f in out/make/**/*.{exe,zip,dmg,deb,rpm}; do
+            [[ -f "$f" ]] || continue
+            # Skip Squirrel delta/full nupkg-adjacent helpers; keep Setup.exe only for Windows
+            base="$(basename "$f")"
+            if [[ "$base" == *.nupkg ]] || [[ "$base" == RELEASES ]]; then
+              continue
+            fi
+            cp "$f" "../release-assets/$base"
+          done
+          echo "Collected assets:"
+          ls -la ../release-assets
+
+      - name: Upload installers to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          tag_name: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
