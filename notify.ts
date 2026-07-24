@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +8,8 @@ export const ENV_FILE = ".env";
 export const BRIEF_FILE = ".notify-brief.md";
 export const SENT_MARKER = ".notify-sent";
 
+const NTFY_KEYS = ["NTFY_URL", "NTFY_TOPIC", "NTFY_TOKEN"] as const;
+
 export type NotifyOptions = {
   title?: string;
   priority?: 1 | 2 | 3 | 4 | 5;
@@ -15,23 +17,43 @@ export type NotifyOptions = {
   click?: string;
 };
 
+export type NtfySettings = {
+  url: string;
+  topic: string;
+  tokenConfigured: boolean;
+  configured: boolean;
+};
+
+function parseEnvLine(line: string): { key: string; value: string } | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#")) return null;
+  const eq = trimmed.indexOf("=");
+  if (eq <= 0) return null;
+  const key = trimmed.slice(0, eq).trim();
+  let value = trimmed.slice(eq + 1).trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1);
+  }
+  return { key, value };
+}
+
+function quoteEnvValue(value: string): string {
+  if (/[\s#"']/.test(value) || value.includes("\\")) {
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  }
+  return value;
+}
+
 export async function loadEnvFile(workspace = packageRoot): Promise<void> {
   try {
     const raw = await readFile(path.join(workspace, ENV_FILE), "utf8");
     for (const line of raw.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq <= 0) continue;
-      const key = trimmed.slice(0, eq).trim();
-      let value = trimmed.slice(eq + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      if (!(key in process.env)) process.env[key] = value;
+      const parsed = parseEnvLine(line);
+      if (!parsed) continue;
+      if (!(parsed.key in process.env)) process.env[parsed.key] = parsed.value;
     }
   } catch {
     // optional
@@ -42,6 +64,108 @@ export function isNtfyConfigured(): boolean {
   const baseUrl = (process.env.NTFY_URL ?? "").replace(/\/$/, "");
   const topic = process.env.NTFY_TOPIC ?? "";
   return Boolean(baseUrl && topic);
+}
+
+export async function readNtfySettings(
+  workspace = packageRoot,
+): Promise<NtfySettings> {
+  const fromFile: Record<string, string> = {};
+  try {
+    const raw = await readFile(path.join(workspace, ENV_FILE), "utf8");
+    for (const line of raw.split(/\r?\n/)) {
+      const parsed = parseEnvLine(line);
+      if (!parsed) continue;
+      if ((NTFY_KEYS as readonly string[]).includes(parsed.key)) {
+        fromFile[parsed.key] = parsed.value;
+      }
+    }
+  } catch {
+    // optional
+  }
+
+  const url = (fromFile.NTFY_URL ?? process.env.NTFY_URL ?? "").trim();
+  const topic = (fromFile.NTFY_TOPIC ?? process.env.NTFY_TOPIC ?? "").trim();
+  const token = (fromFile.NTFY_TOKEN ?? process.env.NTFY_TOKEN ?? "").trim();
+  return {
+    url,
+    topic,
+    tokenConfigured: Boolean(token),
+    configured: Boolean(url.replace(/\/$/, "") && topic),
+  };
+}
+
+export async function writeNtfySettings(
+  workspace: string,
+  input: { url: string; topic: string; token?: string; clearToken?: boolean },
+): Promise<NtfySettings> {
+  const url = input.url.trim().replace(/[\r\n]/g, "");
+  const topic = input.topic.trim().replace(/[\r\n]/g, "");
+  const existingToken = (
+    await (async () => {
+      try {
+        const raw = await readFile(path.join(workspace, ENV_FILE), "utf8");
+        for (const line of raw.split(/\r?\n/)) {
+          const parsed = parseEnvLine(line);
+          if (parsed?.key === "NTFY_TOKEN") return parsed.value.trim();
+        }
+      } catch {
+        // optional
+      }
+      return (process.env.NTFY_TOKEN ?? "").trim();
+    })()
+  );
+  const tokenInput = (input.token ?? "").trim().replace(/[\r\n]/g, "");
+  const token = input.clearToken
+    ? ""
+    : tokenInput || existingToken;
+  const updates: Record<string, string> = {
+    NTFY_URL: url,
+    NTFY_TOPIC: topic,
+    NTFY_TOKEN: token,
+  };
+
+  const envPath = path.join(workspace, ENV_FILE);
+  let lines: string[] = [];
+  try {
+    lines = (await readFile(envPath, "utf8")).split(/\r?\n/);
+  } catch {
+    lines = [
+      "# Optional — leave blank to disable push notifications",
+      "NTFY_URL=",
+      "NTFY_TOPIC=",
+      "NTFY_TOKEN=",
+    ];
+  }
+
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const line of lines) {
+    const parsed = parseEnvLine(line);
+    if (parsed && parsed.key in updates) {
+      next.push(`${parsed.key}=${quoteEnvValue(updates[parsed.key]!)}`);
+      seen.add(parsed.key);
+      continue;
+    }
+    next.push(line);
+  }
+  for (const key of NTFY_KEYS) {
+    if (seen.has(key)) continue;
+    next.push(`${key}=${quoteEnvValue(updates[key]!)}`);
+  }
+
+  while (next.length > 0 && next[next.length - 1] === "") next.pop();
+  await writeFile(envPath, `${next.join("\n")}\n`, "utf8");
+
+  process.env.NTFY_URL = url;
+  process.env.NTFY_TOPIC = topic;
+  process.env.NTFY_TOKEN = token;
+
+  return {
+    url,
+    topic,
+    tokenConfigured: Boolean(token),
+    configured: Boolean(url.replace(/\/$/, "") && topic),
+  };
 }
 
 export async function notify(

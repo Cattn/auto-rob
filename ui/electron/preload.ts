@@ -21,6 +21,8 @@ const api: AutoRobApi = {
 	getHarnessModels: () => ipcRenderer.invoke(IPC.harnessModels),
 	setHarnessModel: (id: HarnessId, model: string) =>
 		ipcRenderer.invoke(IPC.setHarnessModel, id, model),
+	getNtfySettings: () => ipcRenderer.invoke(IPC.ntfyGet),
+	setNtfySettings: (settings) => ipcRenderer.invoke(IPC.ntfySet, settings),
 	onRunEvent: (handler) => {
 		const listener = (_event: Electron.IpcRendererEvent, payload: RunEvent) => {
 			handler(payload);

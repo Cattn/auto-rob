@@ -33,7 +33,7 @@ Agent state lives in an OS user-data **workspace** (not the git checkout):
 
 Override with `AUTO_ROB_WORKSPACE` if needed. On first CLI or UI start, stock defaults are seeded there (without overwriting existing files). Existing clones also get a one-time copy of repo-root files into that folder when the destination file is missing.
 
-Edit the workspace `.env` for push notifications (`NTFY_*` is optional — leave blank to skip):
+Configure push notifications in the UI (**Settings → Phone notifications**) or edit the workspace `.env` (`NTFY_*` is optional — leave blank to skip):
 
 ```
 NTFY_URL=https://ntfy.example.com
@@ -41,7 +41,7 @@ NTFY_TOPIC=auto-rob
 NTFY_TOKEN=your-token
 ```
 
-Self-host guide: [docs.ntfy.sh/install](https://docs.ntfy.sh/install/). Create a topic, add a token if you use auth, then subscribe in the ntfy app.
+Self-host guide: [docs.ntfy.sh/install](https://docs.ntfy.sh/install/). Create a topic, add a token if you use auth, then subscribe in the ntfy app. The agent cannot read `.env`; only the host sends briefs.
 
 ### Migrating from a repo-root workspace
 
@@ -108,7 +108,7 @@ Test notifications:
 npm run notify:test
 ```
 
-Each run streams agent output and writes `run-log.md`. If ntfy is configured, it also sends a phone brief (from `.notify-brief.md`, or a fallback if the agent skipped it).
+Each run streams agent output and writes `run-log.md`. If ntfy is configured, the host sends a phone brief after the run (from `.notify-brief.md`, or a fallback if the agent skipped it). `npm run notify` remains a CLI convenience only — the agent is not told to run it.
 
 ## Schedule
 

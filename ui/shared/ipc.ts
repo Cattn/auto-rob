@@ -11,6 +11,8 @@ export const IPC = {
 	connectHarness: "auto-rob:harness:connect",
 	harnessModels: "auto-rob:harness:models",
 	setHarnessModel: "auto-rob:harness:set-model",
+	ntfyGet: "auto-rob:ntfy:get",
+	ntfySet: "auto-rob:ntfy:set",
 	onboardingGet: "auto-rob:onboarding:get",
 	onboardingSave: "auto-rob:onboarding:save",
 	onboardingApply: "auto-rob:onboarding:apply",
@@ -77,6 +79,13 @@ export type HealthInfo = {
 	harnesses: HarnessConnection[];
 };
 
+export type NtfySettings = {
+	url: string;
+	topic: string;
+	tokenConfigured: boolean;
+	configured: boolean;
+};
+
 export type RunStatus = {
 	state: RunState;
 	message: string;
@@ -101,6 +110,13 @@ export type AutoRobApi = {
 	connectHarness: (id: HarnessId) => Promise<HarnessConnection>;
 	getHarnessModels: () => Promise<HarnessModels>;
 	setHarnessModel: (id: HarnessId, model: string) => Promise<HarnessModels>;
+	getNtfySettings: () => Promise<NtfySettings>;
+	setNtfySettings: (settings: {
+		url: string;
+		topic: string;
+		token?: string;
+		clearToken?: boolean;
+	}) => Promise<NtfySettings>;
 	getOnboarding: () => Promise<OnboardingState>;
 	saveOnboarding: (answers: OnboardingAnswers, opts?: { draft?: boolean }) => Promise<OnboardingState>;
 	applyOnboarding: (answers: OnboardingAnswers) => Promise<OnboardingApplyResult>;

@@ -1,6 +1,63 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { getActiveHarness, getActiveHarnessId } from "./harness/index.js";
+
+export const ONBOARDING_TASK_FILE = ".onboarding-task.md";
+
+export const ONBOARDING_CLI_JSON = {
+  permissions: {
+    allow: [
+      "Read(prompt.md)",
+      "Read(.onboarding-task.md)",
+      "Write(prompt.md)",
+    ],
+    deny: [
+      "Write(prompt.default.md)",
+      "Write(run-log.md)",
+      "Write(long-term.md)",
+      "Write(notes.md)",
+      "Write(onboarding.json)",
+      "Write(auto-rob.config.json)",
+      "Write(.env)",
+      "Write(.env*)",
+      "Write(.cursor/**)",
+      "Mcp(*)",
+      "Shell(*)",
+      "Shell(rm)",
+      "Shell(del)",
+      "Shell(git)",
+      "Shell(npm)",
+      "Shell(npx)",
+    ],
+  },
+};
+
+export async function withOnboardingCliPermissions<T>(
+  workspace: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const cliPath = path.join(workspace, ".cursor", "cli.json");
+  let backup: string | null = null;
+  try {
+    backup = await readFile(cliPath, "utf8");
+  } catch {
+    backup = null;
+  }
+  await writeFile(
+    cliPath,
+    `${JSON.stringify(ONBOARDING_CLI_JSON, null, 2)}\n`,
+    "utf8",
+  );
+  try {
+    return await fn();
+  } finally {
+    if (backup !== null) {
+      await writeFile(cliPath, backup, "utf8");
+    } else {
+      await rm(cliPath, { force: true });
+    }
+  }
+}
 
 export const ONBOARDING_FILE = "onboarding.json";
 export const PROMPT_FILE = "prompt.md";
@@ -213,38 +270,38 @@ export function isDefaultAnswers(answers: OnboardingAnswers): boolean {
   );
 }
 
-export function buildOnboardingAgentKickoff(
+export function buildOnboardingTaskMarkdown(
   answers: OnboardingAnswers,
 ): string {
-  const header = [
-    "You are editing auto-rob's standing agent instructions.",
-    "This is NOT a portfolio run and NOT a trading kickoff.",
-    "Your only job: read prompt.md, then edit it to reflect the owner's onboarding preferences.",
-    "Do not trade. Do not call any Robinhood write tools. Do not modify run-log.md, long-term.md, notes.md, or onboarding.json.",
-    "Keep the existing structure and safety rules in prompt.md.",
-  ];
-
   if (isDefaultAnswers(answers)) {
-    header.push(
+    return [
+      "Check prompt.md only.",
       "",
-      "The owner left all preferences at their defaults (balanced cadence, no intent, no sizing limits).",
-      "Change as little as possible — leave the stock prompt alone unless something is clearly wrong or stale.",
-      "If a User Preferences section already exists and is reasonable, leave it intact.",
-    );
-  } else {
-    header.push(
+      "Owner preferences are all defaults (balanced, no intent, no sizing). Make no changes unless the file is clearly broken.",
       "",
-      "Weave the following preferences into Goals/Workflow and the User Preferences section.",
-      "Be concrete about cadence, sizing floors, and intent. Do not invent dollar limits the owner did not provide.",
-      "If a User Preferences (from onboarding) section exists, refine it so the rest of the prompt is consistent with it.",
+      "Steps:",
+      "1. Read prompt.md",
+      "2. If fine, stop with no edits",
+      "3. Otherwise make the smallest fix, then stop",
       "",
-      "Owner preferences:",
-      formatAnswersForPrompt(answers),
-    );
+      "Do not ask questions. Do not touch any other file.",
+    ].join("\n");
   }
 
-  header.push("", "Read prompt.md, edit it, then stop.");
-  return header.join("\n");
+  return [
+    "Edit prompt.md only.",
+    "",
+    "Owner preferences (weave these into Goals/Workflow and/or a short User Preferences section; do not invent limits):",
+    formatAnswersForPrompt(answers),
+    "",
+    "Steps:",
+    "1. Read prompt.md",
+    "2. Apply the preferences above",
+    "3. Write prompt.md",
+    "4. Stop",
+    "",
+    "Do not ask questions. Do not read or edit any other file.",
+  ].join("\n");
 }
 
 export async function applyOnboardingWithAgent(
@@ -259,17 +316,28 @@ export async function applyOnboardingWithAgent(
     markCompleted: true,
   });
 
-  const kickoff = buildOnboardingAgentKickoff(answers);
+  const taskPath = path.join(workspace, ONBOARDING_TASK_FILE);
+  await writeFile(taskPath, buildOnboardingTaskMarkdown(answers), "utf8");
+
+  const kickoff =
+    "Follow every instruction in .onboarding-task.md exactly. Only edit prompt.md.";
 
   const activeId = await getActiveHarnessId(workspace);
   const harness = await getActiveHarness(workspace);
   console.log(`onboarding apply via harness: ${activeId} (${harness.label})`);
 
-  const exitCode = await harness.run({
-    workspace,
-    kickoff,
-    promptPath,
-  });
+  let exitCode: number;
+  try {
+    exitCode = await withOnboardingCliPermissions(workspace, () =>
+      harness.run({
+        workspace,
+        kickoff,
+        promptPath,
+      }),
+    );
+  } finally {
+    await rm(taskPath, { force: true });
+  }
 
   const state: OnboardingState = {
     ...savedState,
