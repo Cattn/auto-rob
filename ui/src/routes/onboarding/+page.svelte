@@ -6,18 +6,34 @@
 	import { page } from '$app/state';
 	import { Button } from 'm3-svelte';
 	import { getBackend } from '$lib/backend';
-	import type { OnboardingAnswers, OnboardingState, TradeStyle } from '$lib/backend';
+	import type {
+		OnboardingAnswers,
+		OnboardingState,
+		SchedulePreset,
+		TradeStyle
+	} from '$lib/backend';
+	import { anyRunReady } from '$lib/components/HarnessConnectPanel.svelte';
+	import {
+		SCHEDULE_PRESET_OPTIONS,
+		presetForTradeStyle,
+		tradeStyleLabel
+	} from '$lib/schedule-presets';
 
 	const TRADE_OPTIONS: { value: TradeStyle; label: string }[] = [
 		{ value: 'more_active', label: 'More active / faster trades' },
 		{ value: 'balanced', label: 'Balanced cadence' },
-		{ value: 'less_frequent', label: 'Less frequent trades' },
+		{ value: 'less_frequent', label: 'Less frequent trades' }
 	];
 
 	let tradeStyle = $state<TradeStyle>('balanced');
 	let intent = $state('');
 	let minPerTradeUsd = $state<string | number>('');
 	let minBpToAddPosition = $state<string | number>('');
+	let schedulePreset = $state<SchedulePreset>('every_1h');
+	let schedulePresetTouched = $state(false);
+	let scheduleEnabled = $state(false);
+	let scheduleBusy = $state(false);
+	let scheduleMessage = $state<string | null>(null);
 
 	let loading = $state(true);
 	let saving = $state(false);
@@ -29,8 +45,11 @@
 	let state = $state<OnboardingState | null>(null);
 
 	const editMode = $derived(
-		(browser && page.url.searchParams.has('edit')) || Boolean(state?.completedAt),
+		(browser && page.url.searchParams.has('edit')) || Boolean(state?.completedAt)
 	);
+
+	const suggestedPreset = $derived(presetForTradeStyle(tradeStyle));
+	const cadenceMatch = $derived(schedulePreset === suggestedPreset);
 
 	function parseOptionalUsd(raw: string | number | null | undefined): number | null {
 		if (raw === null || raw === undefined || raw === '') return null;
@@ -56,11 +75,62 @@
 		minPerTradeUsd = s.answers.minPerTradeUsd != null ? String(s.answers.minPerTradeUsd) : '';
 		minBpToAddPosition =
 			s.answers.minBpToAddPosition != null ? String(s.answers.minBpToAddPosition) : '';
+		if (!schedulePresetTouched) {
+			schedulePreset = presetForTradeStyle(s.answers.tradeStyle);
+		}
+	}
+
+	function selectTradeStyle(style: TradeStyle) {
+		tradeStyle = style;
+		if (!schedulePresetTouched) {
+			schedulePreset = presetForTradeStyle(style);
+		}
+	}
+
+	function selectSchedulePreset(preset: SchedulePreset) {
+		schedulePreset = preset;
+		schedulePresetTouched = true;
 	}
 
 	function setStatus(msg: string, ok: boolean) {
 		statusMsg = msg;
 		statusOk = ok;
+	}
+
+	async function enableSchedule() {
+		const api = getBackend();
+		if (!api || scheduleBusy) return;
+		scheduleBusy = true;
+		scheduleMessage = null;
+		try {
+			await api.setSchedulePreset(schedulePreset);
+			const status = await api.setScheduleEnabled(true);
+			scheduleEnabled = status.enabled;
+			scheduleMessage = status.enabled
+				? 'Unattended schedule enabled for market hours.'
+				: 'Could not enable schedule.';
+		} catch (err) {
+			scheduleMessage = err instanceof Error ? err.message : String(err);
+		} finally {
+			scheduleBusy = false;
+		}
+	}
+
+	async function skipSchedule() {
+		const api = getBackend();
+		if (!api || scheduleBusy) return;
+		scheduleBusy = true;
+		scheduleMessage = null;
+		try {
+			await api.setSchedulePreset(schedulePreset);
+			const status = await api.setScheduleEnabled(false);
+			scheduleEnabled = status.enabled;
+			scheduleMessage = 'Skipped — you can enable the schedule later in Settings.';
+		} catch (err) {
+			scheduleMessage = err instanceof Error ? err.message : String(err);
+		} finally {
+			scheduleBusy = false;
+		}
 	}
 
 	async function saveDraft() {
@@ -128,10 +198,16 @@
 			loading = false;
 			return;
 		}
-		api
-			.getOnboarding()
-			.then((s) => {
+		Promise.all([api.getHealth(), api.getOnboarding(), api.getSchedule()])
+			.then(([health, s, schedule]) => {
+				if (!anyRunReady(health.harnesses)) {
+					void goto(resolve('/onboarding/setup'));
+					return;
+				}
 				applyState(s);
+				scheduleEnabled = schedule.enabled;
+				schedulePreset = schedule.preset;
+				schedulePresetTouched = schedule.enabled || schedule.preset !== schedule.suggestedPreset;
 				loading = false;
 			})
 			.catch((err) => {
@@ -226,12 +302,85 @@
 									name="trade-style"
 									value={opt.value}
 									checked={tradeStyle === opt.value}
-									onchange={() => (tradeStyle = opt.value)}
+									onchange={() => selectTradeStyle(opt.value)}
 								/>
 								<span class="text-on-surface text-sm font-medium">{opt.label}</span>
 							</label>
 						{/each}
 					</div>
+				</section>
+
+				<section aria-label="Unattended schedule">
+					<div class="mb-3">
+						<h2
+							class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase"
+						>
+							Unattended schedule
+						</h2>
+						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+							Run schedule matches your trade cadence. Market hours are 9:30–4:00 ET
+							(converted to your local time). Nothing is registered until you enable it.
+						</p>
+					</div>
+					<div
+						class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
+						role="radiogroup"
+						aria-label="Schedule preset"
+					>
+						{#each SCHEDULE_PRESET_OPTIONS as opt (opt.value)}
+							<label
+								class={[
+									'flex cursor-pointer items-start gap-3 px-4 py-3.5 transition-colors',
+									schedulePreset === opt.value
+										? 'bg-primary/10'
+										: 'hover:bg-surface-container-highest/60'
+								]}
+							>
+								<input
+									class="text-primary focus:ring-primary mt-1"
+									type="radio"
+									name="schedule-preset"
+									value={opt.value}
+									checked={schedulePreset === opt.value}
+									onchange={() => selectSchedulePreset(opt.value)}
+								/>
+								<span class="min-w-0">
+									<span class="text-on-surface block text-sm font-medium">{opt.label}</span>
+									<span class="text-on-surface-variant mt-0.5 block text-sm">{opt.subtitle}</span>
+								</span>
+							</label>
+						{/each}
+					</div>
+					{#if cadenceMatch}
+						<p class="text-on-surface-variant mt-3 text-sm leading-relaxed">
+							Matches your <span class="text-on-surface font-medium">{tradeStyleLabel(tradeStyle)}</span> cadence.
+						</p>
+					{:else}
+						<p class="text-on-surface-variant mt-3 text-sm leading-relaxed">
+							Cadence is {tradeStyleLabel(tradeStyle)}, but schedule is
+							{SCHEDULE_PRESET_OPTIONS.find((o) => o.value === schedulePreset)?.label ??
+								schedulePreset}.
+						</p>
+					{/if}
+					<div class="mt-4 flex flex-wrap gap-3">
+						<Button
+							variant="filled"
+							disabled={scheduleBusy || scheduleEnabled}
+							click={enableSchedule}
+						>
+							{scheduleBusy
+								? 'Working…'
+								: scheduleEnabled
+									? 'Schedule enabled'
+									: 'Enable unattended schedule'}
+						</Button>
+						<Button variant="tonal" disabled={scheduleBusy} click={skipSchedule}>
+							Skip for now
+						</Button>
+					</div>
+					{#if scheduleMessage}
+						<p class="text-on-surface-variant mt-3 text-sm leading-relaxed">{scheduleMessage}</p>
+					{/if}
 				</section>
 
 				<section aria-label="Intent">

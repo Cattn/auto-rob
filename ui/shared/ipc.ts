@@ -30,6 +30,11 @@ export const IPC = {
 	longTermSetPinned: "auto-rob:long-term:set-pinned",
 	constraintsGet: "auto-rob:constraints:get",
 	constraintsSet: "auto-rob:constraints:set",
+	scheduleGet: "auto-rob:schedule:get",
+	scheduleSetEnabled: "auto-rob:schedule:set-enabled",
+	scheduleSetPaused: "auto-rob:schedule:set-paused",
+	scheduleSetPreset: "auto-rob:schedule:set-preset",
+	scheduleSetRunMissed: "auto-rob:schedule:set-run-missed",
 } as const;
 
 export type TradeStyle = "more_active" | "balanced" | "less_frequent";
@@ -160,6 +165,30 @@ export type Constraints = {
 	notes: string;
 };
 
+export type SchedulePreset = "every_30m" | "every_1h" | "every_2h";
+
+export type SchedulePlatform = "win32" | "darwin" | "linux" | "unsupported";
+
+export type ScheduleStatus = {
+	enabled: boolean;
+	paused: boolean;
+	runMissed: boolean;
+	preset: SchedulePreset;
+	suggestedPreset: SchedulePreset;
+	harnessReady: boolean;
+	canEnable: boolean;
+	active: boolean;
+	installed: boolean;
+	platform: SchedulePlatform;
+	nextRunAt: string | null;
+	nextRunLabel: string | null;
+	slotsLocal: string[];
+	runCommand: string;
+	isPackaged: boolean;
+	cadenceMatch: boolean;
+	error: string | null;
+};
+
 export type AutoRobApi = {
 	getHealth: () => Promise<HealthInfo>;
 	getRunStatus: () => Promise<RunStatus>;
@@ -206,5 +235,10 @@ export type AutoRobApi = {
 	setLongTermPinned: (id: string, pinned: boolean) => Promise<LongTermState>;
 	getConstraints: () => Promise<Constraints>;
 	setConstraints: (constraints: Constraints) => Promise<Constraints>;
+	getSchedule: () => Promise<ScheduleStatus>;
+	setScheduleEnabled: (enabled: boolean) => Promise<ScheduleStatus>;
+	setSchedulePaused: (paused: boolean) => Promise<ScheduleStatus>;
+	setSchedulePreset: (preset: SchedulePreset) => Promise<ScheduleStatus>;
+	setScheduleRunMissed: (runMissed: boolean) => Promise<ScheduleStatus>;
 	onRunEvent: (handler: (event: RunEvent) => void) => () => void;
 };

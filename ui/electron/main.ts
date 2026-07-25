@@ -3,7 +3,8 @@ import path from "node:path";
 import { AgentBridge } from "./agent-bridge";
 import { IPC } from "../shared/ipc";
 
-const runOnce = process.argv.includes("--run-once");
+const catchUp = process.argv.includes("--schedule-catch-up");
+const runOnce = process.argv.includes("--run-once") || catchUp;
 const bridge = new AgentBridge();
 
 const createWindow = () => {
@@ -81,6 +82,19 @@ function registerIpc() {
 	ipcMain.handle(IPC.constraintsSet, (_event, constraints) =>
 		bridge.setConstraints(constraints),
 	);
+	ipcMain.handle(IPC.scheduleGet, () => bridge.getSchedule());
+	ipcMain.handle(IPC.scheduleSetEnabled, (_event, enabled: boolean) =>
+		bridge.setScheduleEnabled(enabled),
+	);
+	ipcMain.handle(IPC.scheduleSetPaused, (_event, paused: boolean) =>
+		bridge.setSchedulePaused(paused),
+	);
+	ipcMain.handle(IPC.scheduleSetPreset, (_event, preset) =>
+		bridge.setSchedulePreset(preset),
+	);
+	ipcMain.handle(IPC.scheduleSetRunMissed, (_event, runMissed: boolean) =>
+		bridge.setScheduleRunMissed(runMissed),
+	);
 }
 
 app.on("ready", () => {
@@ -88,7 +102,16 @@ app.on("ready", () => {
 		process.env.AUTO_ROB_REAL_RUNS = "1";
 		void (async () => {
 			try {
+				const decision = await bridge.decideScheduledRun(catchUp);
+				if (decision.action === "skip") {
+					console.log(`auto-rob schedule skip: ${decision.reason}`);
+					app.exit(0);
+					return;
+				}
 				const status = await bridge.startRunAndWait();
+				if (status.state !== "failed" && decision.slotId) {
+					await bridge.recordScheduledRun(decision.slotId);
+				}
 				const code =
 					status.state === "failed" ? (status.exitCode ?? 1) : (status.exitCode ?? 0);
 				app.exit(code);
@@ -102,6 +125,9 @@ app.on("ready", () => {
 
 	registerIpc();
 	createWindow();
+	void bridge.syncScheduleOnLaunch().catch((err) => {
+		console.error("schedule sync on launch failed", err);
+	});
 });
 
 app.on("window-all-closed", () => {

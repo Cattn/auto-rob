@@ -6,11 +6,13 @@ You pick one AI harness at a time — [Cursor](https://cursor.com/docs/cli/insta
 
 ## Features
 
-- Electron UI for onboarding, strategy, runs, and settings
 - Cursor or Codex as the agent backend (one active harness)
 - Robinhood Trading MCP for portfolio data and orders
 - Optional [ntfy](https://docs.ntfy.sh/install/) push notifications after each run
 - Workspace files (prompt, notes, logs, config) stored in OS user data
+- Opt-in unattended schedule (Task Scheduler / launchd / crontab)
+
+
 
 ## Prerequisites
 
@@ -20,27 +22,40 @@ You pick one AI harness at a time — [Cursor](https://cursor.com/docs/cli/insta
   - the [ChatGPT / Codex](https://chatgpt.com/codex) app
 - Optional: a self-hosted [ntfy](https://docs.ntfy.sh/install/) instance for phone briefs
 
+
+
 ## Setup
 
 1. Install and open auto-rob.
-2. Complete onboarding (trade style, intent, and limits).
-3. In **Settings**, connect Cursor and/or Codex — this walks through Robinhood OAuth for that harness.
-4. Choose the **Active harness** used for runs.
+2. On **Setup**, connect Cursor and/or Codex (Robinhood OAuth for that harness). Continue when at least one is ready.
+3. Complete **preferences** (trade style, intent, and limits). Optionally enable the unattended schedule (tied to your cadence).
+4. In **Settings**, choose the **Active harness** used for runs and tweak schedule/notifications anytime.
 5. Optionally configure **Phone notifications** (ntfy URL, topic, and token).
 
 State lives under the OS user-data folder (`%APPDATA%\auto-rob\workspace` on Windows, `~/Library/Application Support/auto-rob/workspace` on macOS, `~/.config/auto-rob/workspace` on Linux).
 
 ## Schedule
 
-For unattended market-hour runs, point Task Scheduler or cron at the installed app with `--run-once` (about every 2 hours, Mon–Fri). Example cron:
+Unattended runs are **opt-in**. They are never registered automatically.
 
-```cron
-TZ=America/New_York
-30 9-15/2 * * 1-5 "/path/to/auto-rob" --run-once
-0 17 * * 1-5 "/path/to/auto-rob" --run-once
+1. Connect at least one harness (Setup / Settings).
+2. Enable the schedule in onboarding or **Settings → Unattended schedule**.
+3. Pick a preset aligned with trade cadence (market hours 9:30–4:00 ET, converted to local time):
+  - Every 30 minutes → More active
+  - Every hour → Balanced
+  - Every 2 hours → Less frequent
+
+The app installs OS jobs that launch the packaged binary with `--run-once` (Windows Task Scheduler, macOS launchd, Linux crontab). Pause from the bottom bar; disable in Settings to remove OS jobs.
+
+Optional **Run missed slots** catches up at most one latest missed run after wake/login (never chains older slots).
+
+For a custom cadence, copy the command shown in Settings and point your own Task Scheduler / cron / launchd entry at it:
+
+```text
+"/path/to/auto-rob" --run-once
 ```
 
-On Windows, create a Task Scheduler action that launches the app with argument `--run-once` on the same cadence.
+
 
 ## Notes
 

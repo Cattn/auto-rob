@@ -2,14 +2,17 @@
 	import { onMount } from 'svelte';
 	import { Button } from 'm3-svelte';
 	import { getBackend } from '$lib/backend';
-	import type { RunStatus } from '$lib/backend';
+	import type { RunStatus, ScheduleStatus } from '$lib/backend';
 
 	let status = $state('idle');
 	let paused = $state(false);
+	let scheduleEnabled = $state(false);
+	let scheduleActive = $state(false);
 	let lastOutcome = $state('Connecting…');
 	let nextRun = $state('—');
 	let connected = $state(false);
 	let busy = $state(false);
+	let scheduleBusy = $state(false);
 	let fake = $state(true);
 
 	const statusLabel = $derived(
@@ -32,7 +35,15 @@
 		}[status] ?? 'bg-outline'
 	);
 
-	const scheduleLabel = $derived(paused ? 'Paused' : `Next · ${nextRun}`);
+	const scheduleLabel = $derived(
+		!scheduleEnabled
+			? 'Off'
+			: paused
+				? 'Paused'
+				: !scheduleActive
+					? 'Inactive'
+					: `Next · ${nextRun}`
+	);
 
 	function applyStatus(run: RunStatus) {
 		status = run.state;
@@ -40,12 +51,27 @@
 		fake = run.fake;
 	}
 
+	function applySchedule(s: ScheduleStatus) {
+		scheduleEnabled = s.enabled;
+		scheduleActive = s.active;
+		paused = s.paused;
+		nextRun = s.nextRunLabel ?? '—';
+	}
+
+	async function refreshSchedule() {
+		const api = getBackend();
+		if (!api) return;
+		applySchedule(await api.getSchedule());
+	}
+
 	async function runNow() {
 		const api = getBackend();
 		if (!api || busy) return;
 		busy = true;
 		try {
-			paused = false;
+			if (scheduleEnabled && paused) {
+				applySchedule(await api.setSchedulePaused(false));
+			}
 			applyStatus(await api.startRun());
 		} catch (err) {
 			status = 'failed';
@@ -55,8 +81,17 @@
 		}
 	}
 
-	function pauseSchedule() {
-		paused = !paused;
+	async function pauseSchedule() {
+		const api = getBackend();
+		if (!api || scheduleBusy || !scheduleEnabled) return;
+		scheduleBusy = true;
+		try {
+			applySchedule(await api.setSchedulePaused(!paused));
+		} catch (err) {
+			lastOutcome = err instanceof Error ? err.message : String(err);
+		} finally {
+			scheduleBusy = false;
+		}
 	}
 
 	async function stop() {
@@ -87,8 +122,13 @@
 
 		void (async () => {
 			try {
-				const [health, run] = await Promise.all([api.getHealth(), api.getRunStatus()]);
+				const [health, run, schedule] = await Promise.all([
+					api.getHealth(),
+					api.getRunStatus(),
+					api.getSchedule()
+				]);
 				applyStatus(run);
+				applySchedule(schedule);
 				fake = health.fakeRuns;
 				if (run.state === 'idle' && run.message === 'Ready') {
 					const harnessLabel =
@@ -114,6 +154,11 @@
 			}
 		})();
 
+		const onFocus = () => {
+			void refreshSchedule().catch(() => {});
+		};
+		window.addEventListener('focus', onFocus);
+
 		unsubscribe = api.onRunEvent((event) => {
 			if (event.type === 'log') {
 				console.log('[auto-rob run]', event.line);
@@ -121,12 +166,18 @@
 			if (event.type === 'status') {
 				console.log('[auto-rob status]', event.status.state, event.status.message);
 				applyStatus(event.status);
+				if (event.status.state === 'idle' || event.status.state === 'failed') {
+					void refreshSchedule().catch(() => {});
+				}
 			} else if (event.type === 'log' && (status === 'running' || status === 'failed')) {
 				lastOutcome = event.line.slice(0, 240);
 			}
 		});
 
-		return () => unsubscribe();
+		return () => {
+			unsubscribe();
+			window.removeEventListener('focus', onFocus);
+		};
 	});
 </script>
 
@@ -162,7 +213,11 @@
 			>
 				Run now
 			</Button>
-			<Button variant="tonal" disabled={!connected} click={pauseSchedule}>
+			<Button
+				variant="tonal"
+				disabled={!connected || !scheduleEnabled || scheduleBusy}
+				click={pauseSchedule}
+			>
 				{paused ? 'Resume schedule' : 'Pause schedule'}
 			</Button>
 			{#if status === 'running'}
