@@ -2,7 +2,7 @@
 
 Desktop app that runs a Robinhood portfolio agent on a schedule. It reviews your account, researches when needed, trades when conviction is high, and can send a short phone brief when a run finishes.
 
-You pick one AI harness at a time — [Cursor](https://cursor.com/docs/cli/installation) (Agent CLI) or [ChatGPT / Codex](https://chatgpt.com/codex) — and connect Robinhood from the app. No terminal setup is required for normal use.
+You pick one AI harness at a time - [Cursor](https://cursor.com/docs/cli/installation) (Agent CLI) or [ChatGPT / Codex](https://chatgpt.com/codex) - and connect Robinhood from the app.
 
 ## Features
 
@@ -35,8 +35,6 @@ You pick one AI harness at a time — [Cursor](https://cursor.com/docs/cli/insta
 State lives under the OS user-data folder (`%APPDATA%\auto-rob\workspace` on Windows, `~/Library/Application Support/auto-rob/workspace` on macOS, `~/.config/auto-rob/workspace` on Linux).
 
 ## Schedule
-
-Unattended runs are **opt-in**. They are never registered automatically.
 
 1. Connect at least one harness (Setup / Settings).
 2. Enable the schedule in onboarding or **Settings → Unattended schedule**.
