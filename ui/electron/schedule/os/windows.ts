@@ -1,21 +1,20 @@
+import { app } from "electron";
 import { spawn } from "node:child_process";
-import { writeFile, unlink, mkdir } from "node:fs/promises";
-import os from "node:os";
+import { writeFile, unlink, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { SchedulePreset } from "../presets";
 import { localTriggerTimes, type LocalParts } from "../slots";
-import {
-	resolveRunCommand,
-	workingDirectoryForCommand,
-} from "../path";
+import { ensureWindowsScheduleLauncher } from "../path";
 
-const TASK_PREFIX = "auto-rob\\slot-";
+const TASK_NAME = "auto-rob";
+const LEGACY_TASK_PREFIX = "auto-rob-slot-";
 
-function execSchtasks(
+function exec(
+	command: string,
 	args: string[],
 ): Promise<{ code: number; stdout: string; stderr: string }> {
 	return new Promise((resolve, reject) => {
-		const child = spawn("schtasks", args, {
+		const child = spawn(command, args, {
 			windowsHide: true,
 			shell: false,
 		});
@@ -34,84 +33,16 @@ function execSchtasks(
 	});
 }
 
+function quotePsSingle(s: string): string {
+	return `'${s.replace(/'/g, "''")}'`;
+}
+
+function quoteCmdPath(p: string): string {
+	return `"${p.replace(/"/g, '""')}"`;
+}
+
 function slotKey(local: LocalParts): string {
 	return `${String(local.hour).padStart(2, "0")}${String(local.minute).padStart(2, "0")}`;
-}
-
-function escapeXml(s: string): string {
-	return s
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;");
-}
-
-function quoteArg(arg: string): string {
-	if (!/[ \t"]/.test(arg)) return arg;
-	return `"${arg.replace(/"/g, '\\"')}"`;
-}
-
-function buildTaskXml(
-	taskName: string,
-	local: LocalParts,
-	command: string,
-	args: string[],
-	cwd: string,
-	runMissed: boolean,
-): string {
-	const startBoundary = new Date();
-	startBoundary.setFullYear(startBoundary.getFullYear(), startBoundary.getMonth(), startBoundary.getDate());
-	startBoundary.setHours(local.hour, local.minute, 0, 0);
-	const pad = (n: number) => String(n).padStart(2, "0");
-	const boundary = `${startBoundary.getFullYear()}-${pad(startBoundary.getMonth() + 1)}-${pad(startBoundary.getDate())}T${pad(local.hour)}:${pad(local.minute)}:00`;
-	const argsLine = args.map(quoteArg).join(" ");
-	return `<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <URI>\\${escapeXml(taskName)}</URI>
-  </RegistrationInfo>
-  <Triggers>
-    <CalendarTrigger>
-      <StartBoundary>${boundary}</StartBoundary>
-      <Enabled>true</Enabled>
-      <ScheduleByWeek>
-        <WeeksInterval>1</WeeksInterval>
-        <DaysOfWeek>
-          <Monday /><Tuesday /><Wednesday /><Thursday /><Friday />
-        </DaysOfWeek>
-      </ScheduleByWeek>
-    </CalendarTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id="Author">
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>LeastPrivilege</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>${runMissed ? "true" : "false"}</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT4H</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>${escapeXml(command)}</Command>
-      ${argsLine ? `<Arguments>${escapeXml(argsLine)}</Arguments>` : ""}
-      <WorkingDirectory>${escapeXml(cwd)}</WorkingDirectory>
-    </Exec>
-  </Actions>
-</Task>
-`;
 }
 
 function uniqueLocalTimes(locals: LocalParts[]): LocalParts[] {
@@ -126,72 +57,194 @@ function uniqueLocalTimes(locals: LocalParts[]): LocalParts[] {
 	return out;
 }
 
-async function listAutoRobTasks(): Promise<string[]> {
-	const result = await execSchtasks(["/Query", "/FO", "LIST"]);
-	const names: string[] = [];
-	for (const line of result.stdout.split(/\r?\n/)) {
-		const match = line.match(/^TaskName:\s+(.+)$/i);
-		if (!match) continue;
-		const name = match[1]!.trim().replace(/^\\/, "");
-		if (name.startsWith("auto-rob\\slot-") || name.startsWith("auto-rob/slot-")) {
-			names.push(name);
+function cmdExePath(): string {
+	return path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "cmd.exe");
+}
+
+async function scheduleDir(): Promise<string> {
+	const dir = path.join(app.getPath("userData"), "schedule");
+	await mkdir(dir, { recursive: true });
+	return dir;
+}
+
+async function writeJobPs1(script: string): Promise<string> {
+	const dir = await scheduleDir();
+	const ps1Path = path.join(
+		dir,
+		`job-${Date.now()}-${Math.random().toString(16).slice(2)}.ps1`,
+	);
+	await writeFile(ps1Path, script, "utf8");
+	return ps1Path;
+}
+
+async function runPs1(
+	ps1Path: string,
+): Promise<{ code: number; stdout: string; stderr: string }> {
+	return exec("powershell.exe", [
+		"-NoProfile",
+		"-NonInteractive",
+		"-ExecutionPolicy",
+		"Bypass",
+		"-File",
+		ps1Path,
+	]);
+}
+
+async function runPs1Elevated(
+	ps1Path: string,
+): Promise<{ code: number; stdout: string; stderr: string }> {
+	const launcher = [
+		`$p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',${quotePsSingle(ps1Path)}) -Verb RunAs -Wait -PassThru`,
+		`if ($null -eq $p) { exit 1 }`,
+		`exit $p.ExitCode`,
+	].join("; ");
+	return exec("powershell.exe", [
+		"-NoProfile",
+		"-NonInteractive",
+		"-ExecutionPolicy",
+		"Bypass",
+		"-Command",
+		launcher,
+	]);
+}
+
+async function runScheduleScript(body: string): Promise<void> {
+	const dir = await scheduleDir();
+	const stamp = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+	const ps1Path = path.join(dir, `job-${stamp}.ps1`);
+	const logPath = path.join(dir, `job-${stamp}.log`);
+
+	await writeFile(
+		ps1Path,
+		[
+			`$ErrorActionPreference = 'Stop'`,
+			`try {`,
+			body,
+			`  Set-Content -LiteralPath ${quotePsSingle(logPath)} -Value 'OK' -Encoding utf8`,
+			`  exit 0`,
+			`} catch {`,
+			`  Set-Content -LiteralPath ${quotePsSingle(logPath)} -Value $_.Exception.Message -Encoding utf8`,
+			`  exit 1`,
+			`}`,
+		].join("\r\n"),
+		"utf8",
+	);
+
+	try {
+		let result = await runPs1(ps1Path);
+		if (result.code !== 0) {
+			await writeFile(logPath, "", "utf8").catch(() => {});
+			result = await runPs1Elevated(ps1Path);
 		}
+
+		let log = "";
+		try {
+			log = (await readFile(logPath, "utf8")).trim();
+		} catch {
+			// ignore
+		}
+
+		if (result.code === 0 || log === "OK") return;
+
+		const detail = log || `${result.stderr}\n${result.stdout}`.trim();
+		if (/canceled by the user/i.test(detail) || result.code === 1223) {
+			throw new Error("Administrator permission was declined.");
+		}
+		throw new Error(detail || "Failed to update Windows Task Scheduler");
+	} finally {
+		await unlink(ps1Path).catch(() => {});
+		await unlink(logPath).catch(() => {});
 	}
-	return names;
+}
+
+type ListedTask = { taskName: string; taskPath: string };
+
+async function listAutoRobTasks(): Promise<ListedTask[]> {
+	const ps1Path = await writeJobPs1(
+		[
+			`Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {`,
+			`  ($_.TaskName -eq ${quotePsSingle(TASK_NAME)}) -or`,
+			`  ($_.TaskName -like '${LEGACY_TASK_PREFIX}*') -or`,
+			`  ($_.TaskPath -eq '\\auto-rob\\' -and $_.TaskName -like 'slot-*')`,
+			`} | ForEach-Object { Write-Output ("{0}\t{1}" -f $_.TaskPath, $_.TaskName) }`,
+		].join("\r\n"),
+	);
+
+	try {
+		const result = await runPs1(ps1Path);
+		const out: ListedTask[] = [];
+		for (const line of result.stdout.split(/\r?\n/)) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			const tab = trimmed.indexOf("\t");
+			if (tab <= 0) continue;
+			out.push({
+				taskPath: trimmed.slice(0, tab),
+				taskName: trimmed.slice(tab + 1),
+			});
+		}
+		return out;
+	} finally {
+		await unlink(ps1Path).catch(() => {});
+	}
+}
+
+function buildRemoveScript(tasks: ListedTask[]): string {
+	if (tasks.length === 0) return "";
+	return tasks
+		.map(
+			(t) =>
+				`Unregister-ScheduledTask -TaskName ${quotePsSingle(t.taskName)} -TaskPath ${quotePsSingle(t.taskPath)} -Confirm:$false -ErrorAction SilentlyContinue`,
+		)
+		.join("\r\n");
+}
+
+function buildInstallScript(
+	locals: LocalParts[],
+	launcherPath: string,
+	runMissed: boolean,
+): string {
+	const cmd = cmdExePath();
+	const workDir = path.dirname(launcherPath);
+	const arg = `/d /c ${quoteCmdPath(launcherPath)}`;
+	const lines: string[] = [
+		`$action = New-ScheduledTaskAction -Execute ${quotePsSingle(cmd)} -Argument ${quotePsSingle(arg)} -WorkingDirectory ${quotePsSingle(workDir)}`,
+		`$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 4)${runMissed ? " -StartWhenAvailable" : ""}`,
+		`$principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited`,
+		`$triggers = @()`,
+	];
+
+	for (const local of locals) {
+		const at = `${String(local.hour).padStart(2, "0")}:${String(local.minute).padStart(2, "0")}`;
+		lines.push(
+			`$triggers += New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At ${quotePsSingle(at)}`,
+		);
+	}
+
+	lines.push(
+		`Register-ScheduledTask -TaskName ${quotePsSingle(TASK_NAME)} -Action $action -Trigger $triggers -Settings $settings -Principal $principal -Force | Out-Null`,
+	);
+
+	return lines.join("\r\n");
 }
 
 export async function uninstallWindowsSchedule(): Promise<void> {
-	const names = await listAutoRobTasks();
-	for (const name of names) {
-		await execSchtasks(["/Delete", "/TN", name, "/F"]);
-	}
+	const existing = await listAutoRobTasks();
+	if (existing.length === 0) return;
+	await runScheduleScript(buildRemoveScript(existing));
 }
 
 export async function installWindowsSchedule(
 	preset: SchedulePreset,
 	runMissed: boolean,
 ): Promise<void> {
-	await uninstallWindowsSchedule();
-	const cmd = resolveRunCommand(false);
-	const cwd = workingDirectoryForCommand(cmd.command);
+	const existing = await listAutoRobTasks();
+	const launcherPath = await ensureWindowsScheduleLauncher(false);
 	const locals = uniqueLocalTimes(localTriggerTimes(preset));
-	const tmpDir = path.join(os.tmpdir(), "auto-rob-schedule");
-	await mkdir(tmpDir, { recursive: true });
-
-	for (const local of locals) {
-		const key = slotKey(local);
-		const taskName = `${TASK_PREFIX}${key}`;
-		const xmlPath = path.join(tmpDir, `${key}.xml`);
-		const xml = buildTaskXml(
-			taskName,
-			local,
-			cmd.command,
-			cmd.args,
-			cwd,
-			runMissed,
-		);
-		await writeFile(xmlPath, `\uFEFF${xml}`, "utf16le");
-		const result = await execSchtasks([
-			"/Create",
-			"/TN",
-			taskName,
-			"/XML",
-			xmlPath,
-			"/F",
-		]);
-		try {
-			await unlink(xmlPath);
-		} catch {
-			// ignore
-		}
-		if (result.code !== 0) {
-			throw new Error(
-				result.stderr.trim() ||
-					result.stdout.trim() ||
-					`schtasks failed for ${taskName}`,
-			);
-		}
-	}
+	const script = [buildRemoveScript(existing), buildInstallScript(locals, launcherPath, runMissed)]
+		.filter(Boolean)
+		.join("\r\n");
+	await runScheduleScript(script);
 }
 
 export async function windowsScheduleInstalled(): Promise<boolean> {
