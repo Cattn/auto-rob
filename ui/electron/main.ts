@@ -1,7 +1,12 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
+import started from "electron-squirrel-startup";
 import { AgentBridge } from "./agent-bridge";
 import { IPC } from "../shared/ipc";
+
+if (started) {
+	app.quit();
+}
 
 const catchUp = process.argv.includes("--schedule-catch-up");
 const runOnce = process.argv.includes("--run-once") || catchUp;
@@ -98,6 +103,7 @@ function registerIpc() {
 }
 
 app.on("ready", () => {
+	if (started) return;
 	if (runOnce) {
 		process.env.AUTO_ROB_REAL_RUNS = "1";
 		void (async () => {
@@ -131,19 +137,20 @@ app.on("ready", () => {
 });
 
 app.on("window-all-closed", () => {
-	if (runOnce) return;
+	if (started || runOnce) return;
 	if (process.platform !== "darwin") {
 		app.quit();
 	}
 });
 
 app.on("activate", () => {
-	if (runOnce) return;
+	if (started || runOnce) return;
 	if (BrowserWindow.getAllWindows().length === 0) {
 		createWindow();
 	}
 });
 
 app.on("before-quit", () => {
+	if (started) return;
 	void bridge.stopRun();
 });

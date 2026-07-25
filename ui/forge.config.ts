@@ -1,5 +1,5 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
-import { MakerWix } from "@electron-forge/maker-wix";
+import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerDMG } from "@electron-forge/maker-dmg";
 import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerRpm } from "@electron-forge/maker-rpm";
@@ -14,12 +14,12 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerWix({
-      language: 1033,
-      manufacturer: "auto-rob",
-      ui: {
-        chooseDirectory: true,
-      },
+    new MakerSquirrel({
+      name: "electronSvelte",
+      authors: "auto-rob",
+      description: "Electron Svelte",
+      exe: "electron-svelte.exe",
+      setupExe: "electron-svelte-Setup.exe",
     }),
     new MakerDMG({}),
     new MakerRpm({

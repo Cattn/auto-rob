@@ -83,6 +83,8 @@ async function runPs1(
 	return exec("powershell.exe", [
 		"-NoProfile",
 		"-NonInteractive",
+		"-WindowStyle",
+		"Hidden",
 		"-ExecutionPolicy",
 		"Bypass",
 		"-File",
@@ -94,13 +96,15 @@ async function runPs1Elevated(
 	ps1Path: string,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
 	const launcher = [
-		`$p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',${quotePsSingle(ps1Path)}) -Verb RunAs -Wait -PassThru`,
+		`$p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',${quotePsSingle(ps1Path)}) -Verb RunAs -WindowStyle Hidden -Wait -PassThru`,
 		`if ($null -eq $p) { exit 1 }`,
 		`exit $p.ExitCode`,
 	].join("; ");
 	return exec("powershell.exe", [
 		"-NoProfile",
 		"-NonInteractive",
+		"-WindowStyle",
+		"Hidden",
 		"-ExecutionPolicy",
 		"Bypass",
 		"-Command",
@@ -118,6 +122,16 @@ async function runScheduleScript(body: string): Promise<void> {
 		ps1Path,
 		[
 			`$ErrorActionPreference = 'Stop'`,
+			`try {`,
+			`  if (-not ('AutoRob.Native.Window' -as [type])) {`,
+			`    Add-Type -Namespace AutoRob.Native -Name Window -MemberDefinition @"`,
+			`[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow();`,
+			`[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);`,
+			`"@`,
+			`  }`,
+			`  $hwnd = [AutoRob.Native.Window]::GetConsoleWindow()`,
+			`  if ($hwnd -ne [System.IntPtr]::Zero) { [void][AutoRob.Native.Window]::ShowWindow($hwnd, 0) }`,
+			`} catch {}`,
 			`try {`,
 			body,
 			`  Set-Content -LiteralPath ${quotePsSingle(logPath)} -Value 'OK' -Encoding utf8`,
