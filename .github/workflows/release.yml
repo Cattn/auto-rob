@@ -28,24 +28,6 @@ jobs:
           sudo apt-get install -y fakeroot dpkg rpm squashfs-tools
         working-directory: .
 
-      - name: Setup WiX Toolset
-        if: runner.os == 'Windows'
-        shell: pwsh
-        working-directory: .
-        run: |
-          $candle = Get-ChildItem "C:\Program Files (x86)\WiX Toolset*" -Recurse -Filter candle.exe -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-          if (-not $candle) {
-            choco install wixtoolset --yes --no-progress
-            $candle = Get-ChildItem "C:\Program Files (x86)\WiX Toolset*" -Recurse -Filter candle.exe -ErrorAction SilentlyContinue |
-              Select-Object -First 1
-          }
-          if (-not $candle) {
-            throw "WiX candle.exe not found"
-          }
-          echo $candle.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          Write-Host "Using WiX at $($candle.DirectoryName)"
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -73,7 +55,7 @@ jobs:
         run: |
           mkdir -p ../release-assets
           find out/make -type f \( \
-            -name '*.msi' -o \
+            -name '*Setup.exe' -o \
             -name '*.dmg' -o \
             -name '*.deb' -o \
             -name '*.rpm' -o \
