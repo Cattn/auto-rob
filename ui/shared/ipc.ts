@@ -17,6 +17,12 @@ export const IPC = {
 	onboardingSave: "auto-rob:onboarding:save",
 	onboardingApply: "auto-rob:onboarding:apply",
 	promptReset: "auto-rob:prompt:reset",
+	notesGet: "auto-rob:notes:get",
+	notesSaveActive: "auto-rob:notes:save-active",
+	notesCreate: "auto-rob:notes:create",
+	notesUpdate: "auto-rob:notes:update",
+	notesDelete: "auto-rob:notes:delete",
+	notesSetActive: "auto-rob:notes:set-active",
 } as const;
 
 export type TradeStyle = "more_active" | "balanced" | "less_frequent";
@@ -99,6 +105,18 @@ export type RunEvent =
 	| { type: "status"; status: RunStatus }
 	| { type: "log"; line: string };
 
+export type SavedNoteMeta = {
+	id: string;
+	title: string;
+	updatedAt: string;
+};
+
+export type NotesState = {
+	content: string;
+	activeId: string | null;
+	notes: SavedNoteMeta[];
+};
+
 export type AutoRobApi = {
 	getHealth: () => Promise<HealthInfo>;
 	getRunStatus: () => Promise<RunStatus>;
@@ -122,5 +140,14 @@ export type AutoRobApi = {
 	saveOnboarding: (answers: OnboardingAnswers, opts?: { draft?: boolean }) => Promise<OnboardingState>;
 	applyOnboarding: (answers: OnboardingAnswers) => Promise<OnboardingApplyResult>;
 	resetPrompt: () => Promise<PromptResetResult>;
+	getNotes: () => Promise<NotesState>;
+	saveActiveNote: (content: string) => Promise<NotesState>;
+	createSavedNote: (opts?: { title?: string; content?: string }) => Promise<NotesState>;
+	updateSavedNote: (
+		id: string,
+		opts: { title?: string; content?: string },
+	) => Promise<NotesState>;
+	deleteSavedNote: (id: string) => Promise<NotesState>;
+	setActiveNote: (id: string) => Promise<NotesState>;
 	onRunEvent: (handler: (event: RunEvent) => void) => () => void;
 };

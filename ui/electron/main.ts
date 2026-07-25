@@ -56,6 +56,16 @@ function registerIpc() {
 	);
 	ipcMain.handle(IPC.ntfyGet, () => bridge.getNtfySettings());
 	ipcMain.handle(IPC.ntfySet, (_event, settings) => bridge.setNtfySettings(settings));
+	ipcMain.handle(IPC.notesGet, () => bridge.getNotes());
+	ipcMain.handle(IPC.notesSaveActive, (_event, content: string) =>
+		bridge.saveActiveNote(content),
+	);
+	ipcMain.handle(IPC.notesCreate, (_event, opts) => bridge.createSavedNote(opts));
+	ipcMain.handle(IPC.notesUpdate, (_event, id: string, opts) =>
+		bridge.updateSavedNote(id, opts),
+	);
+	ipcMain.handle(IPC.notesDelete, (_event, id: string) => bridge.deleteSavedNote(id));
+	ipcMain.handle(IPC.notesSetActive, (_event, id: string) => bridge.setActiveNote(id));
 }
 
 app.on("ready", () => {
