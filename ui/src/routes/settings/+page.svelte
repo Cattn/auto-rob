@@ -9,8 +9,15 @@
 		HarnessId,
 		HarnessModels,
 		HealthInfo,
-		NtfySettings
+		NtfySettings,
+		SchedulePreset,
+		ScheduleStatus
 	} from '$lib/backend';
+	import HarnessConnectPanel from '$lib/components/HarnessConnectPanel.svelte';
+	import {
+		SCHEDULE_PRESET_OPTIONS,
+		tradeStyleLabel
+	} from '$lib/schedule-presets';
 
 	let health = $state<HealthInfo | null>(null);
 	let harnesses = $state<HarnessConnection[]>([]);
@@ -20,13 +27,15 @@
 	let ntfy = $state<NtfySettings | null>(null);
 	let draftNtfy = $state({ url: '', topic: '', token: '' });
 	let clearNtfyToken = $state(false);
+	let schedule = $state<ScheduleStatus | null>(null);
 	let loadError = $state<string | null>(null);
-	let connectingId = $state<HarnessId | null>(null);
-	let connectMessage = $state<string | null>(null);
 	let settingActive = $state(false);
 	let savingModelId = $state<HarnessId | null>(null);
 	let savingNtfy = $state(false);
 	let ntfyMessage = $state<string | null>(null);
+	let scheduleBusy = $state(false);
+	let scheduleMessage = $state<string | null>(null);
+	let copiedCommand = $state(false);
 
 	const available = $derived(harnesses.filter((h) => h.binaryOk));
 
@@ -52,23 +61,6 @@
 		const nextModels = modelsFromHarnesses(info.harnesses);
 		models = nextModels;
 		draftModels = { ...nextModels };
-	}
-
-	function statusText(h: HarnessConnection): string {
-		if (!h.binaryOk) return 'CLI missing';
-		if (!h.mcpConfigured || !h.mcpAuthenticated) return 'needs Robinhood connect';
-		return 'connected';
-	}
-
-	function needsConnect(h: HarnessConnection): boolean {
-		return h.binaryOk && (!h.mcpConfigured || !h.mcpAuthenticated);
-	}
-
-	function installHelp(h: HarnessConnection): string {
-		if (h.id === 'cursor') {
-			return 'Install the Cursor CLI from cursor.com/docs/cli/installation, then return here.';
-		}
-		return 'Install the ChatGPT / Codex app, then return here.';
 	}
 
 	function modelHint(id: HarnessId): string {
@@ -97,28 +89,72 @@
 	async function refresh() {
 		const api = getBackend();
 		if (!api) return;
-		const [healthInfo, ntfySettings] = await Promise.all([
+		const [healthInfo, ntfySettings, scheduleStatus] = await Promise.all([
 			api.getHealth(),
-			api.getNtfySettings()
+			api.getNtfySettings(),
+			api.getSchedule()
 		]);
 		applyHealth(healthInfo);
 		applyNtfy(ntfySettings);
+		schedule = scheduleStatus;
 	}
 
-	async function connect(id: HarnessId) {
+	async function setScheduleEnabled(enabled: boolean) {
 		const api = getBackend();
-		if (!api || connectingId) return;
-		connectingId = id;
-		connectMessage = null;
+		if (!api || scheduleBusy) return;
+		scheduleBusy = true;
+		scheduleMessage = null;
 		try {
-			await api.connectHarness(id);
-			connectMessage =
-				'Browser opened — finish Robinhood login in the browser, then return here.';
-			await refresh();
+			schedule = await api.setScheduleEnabled(enabled);
+			scheduleMessage = enabled
+				? 'Unattended schedule enabled.'
+				: 'Schedule disabled — OS jobs removed.';
 		} catch (err) {
-			connectMessage = err instanceof Error ? err.message : String(err);
+			scheduleMessage = err instanceof Error ? err.message : String(err);
+			await refresh().catch(() => {});
 		} finally {
-			connectingId = null;
+			scheduleBusy = false;
+		}
+	}
+
+	async function setSchedulePreset(preset: SchedulePreset) {
+		const api = getBackend();
+		if (!api || scheduleBusy || schedule?.preset === preset) return;
+		scheduleBusy = true;
+		scheduleMessage = null;
+		try {
+			schedule = await api.setSchedulePreset(preset);
+		} catch (err) {
+			scheduleMessage = err instanceof Error ? err.message : String(err);
+		} finally {
+			scheduleBusy = false;
+		}
+	}
+
+	async function setScheduleRunMissed(runMissed: boolean) {
+		const api = getBackend();
+		if (!api || scheduleBusy) return;
+		scheduleBusy = true;
+		scheduleMessage = null;
+		try {
+			schedule = await api.setScheduleRunMissed(runMissed);
+		} catch (err) {
+			scheduleMessage = err instanceof Error ? err.message : String(err);
+		} finally {
+			scheduleBusy = false;
+		}
+	}
+
+	async function copyRunCommand() {
+		if (!schedule?.runCommand) return;
+		try {
+			await navigator.clipboard.writeText(schedule.runCommand);
+			copiedCommand = true;
+			setTimeout(() => {
+				copiedCommand = false;
+			}, 1500);
+		} catch {
+			scheduleMessage = 'Could not copy to clipboard.';
 		}
 	}
 
@@ -246,70 +282,7 @@
 						</p>
 					</div>
 
-					{#if harnesses.length === 0}
-						<div class="bg-surface-container-high ring-outline/50 rounded-xl p-4 ring-1">
-							<p class="text-on-surface-variant text-sm">Loading harnesses…</p>
-						</div>
-					{:else}
-						<div
-							class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
-						>
-							{#each harnesses as h (h.id)}
-								<div class="flex flex-col gap-2 px-4 py-3.5">
-									<div class="flex items-center justify-between gap-3">
-										<div class="min-w-0">
-											<p class="text-on-surface text-sm font-medium">{h.label}</p>
-											<p class="text-on-surface-variant mt-0.5 text-sm">
-												{#if !h.binaryOk}
-													CLI binary not found on this machine
-												{:else if needsConnect(h)}
-													Binary ready — finish Robinhood connect
-												{:else}
-													Ready for agent runs
-												{/if}
-											</p>
-										</div>
-										<div class="flex shrink-0 items-center gap-2">
-											<span
-												class={[
-													'rounded-md px-2.5 py-1 text-xs font-medium',
-													h.binaryOk && h.mcpConfigured && h.mcpAuthenticated
-														? 'bg-primary/15 text-primary'
-														: 'bg-error-container text-on-error-container'
-												]}
-											>
-												{statusText(h)}
-											</span>
-											{#if needsConnect(h)}
-												<Button
-													variant="filled"
-													disabled={connectingId !== null}
-													click={() => connect(h.id)}
-												>
-													{connectingId === h.id ? 'Connecting…' : 'Connect'}
-												</Button>
-											{/if}
-										</div>
-									</div>
-									{#if !h.binaryOk}
-										<p class="text-on-surface-variant text-sm leading-relaxed">
-											{installHelp(h)}
-										</p>
-									{/if}
-									{#if h.error}
-										<p class="text-error text-sm">{h.error}</p>
-									{/if}
-								</div>
-							{/each}
-						</div>
-						{#if connectMessage}
-							<p
-								class="bg-surface-container-high text-on-surface-variant ring-outline/50 mt-3 rounded-xl px-4 py-3 text-sm leading-relaxed ring-1"
-							>
-								{connectMessage}
-							</p>
-						{/if}
-					{/if}
+					<HarnessConnectPanel bind:harnesses onrefresh={refresh} />
 				</section>
 
 				<section aria-label="Active harness">
@@ -420,6 +393,145 @@
 								</div>
 							{/each}
 						</div>
+					{/if}
+				</section>
+
+				<section aria-label="Schedule">
+					<div class="mb-3">
+						<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
+							Unattended schedule
+						</h2>
+						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+							Market hours 9:30–4:00 ET in your local time. Enable only after a harness is
+							connected.
+						</p>
+					</div>
+					{#if schedule === null}
+						<div class="bg-surface-container-high ring-outline/50 rounded-xl p-4 ring-1">
+							<p class="text-on-surface-variant text-sm">Loading schedule…</p>
+						</div>
+					{:else}
+						<div
+							class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
+						>
+							<div class="flex items-center justify-between gap-3 px-4 py-3.5">
+								<div class="min-w-0">
+									<p class="text-on-surface text-sm font-medium">Enable schedule</p>
+									<p class="text-on-surface-variant mt-0.5 text-sm">
+										{#if !schedule.canEnable}
+											Connect Cursor or Codex first
+										{:else if schedule.enabled}
+											OS jobs installed · next {schedule.nextRunLabel ?? '—'}
+										{:else}
+											Off — no OS jobs registered
+										{/if}
+									</p>
+								</div>
+								<Button
+									variant={schedule.enabled ? 'tonal' : 'filled'}
+									disabled={scheduleBusy || (!schedule.enabled && !schedule.canEnable)}
+									click={() => setScheduleEnabled(!schedule.enabled)}
+								>
+									{scheduleBusy
+										? 'Working…'
+										: schedule.enabled
+											? 'Disable'
+											: 'Enable'}
+								</Button>
+							</div>
+							<div class="px-4 py-3.5">
+								<p class="text-on-surface mb-2 text-sm font-medium">Preset</p>
+								<div class="flex flex-col gap-2" role="radiogroup" aria-label="Schedule preset">
+									{#each SCHEDULE_PRESET_OPTIONS as opt (opt.value)}
+										<label
+											class={[
+												'flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2 transition-colors',
+												schedule.preset === opt.value
+													? 'bg-primary/10'
+													: 'hover:bg-surface-container-highest/60'
+											]}
+										>
+											<input
+												class="text-primary focus:ring-primary mt-1"
+												type="radio"
+												name="settings-schedule-preset"
+												value={opt.value}
+												checked={schedule.preset === opt.value}
+												disabled={scheduleBusy}
+												onchange={() => setSchedulePreset(opt.value)}
+											/>
+											<span class="min-w-0">
+												<span class="text-on-surface block text-sm font-medium"
+													>{opt.label}</span
+												>
+												<span class="text-on-surface-variant mt-0.5 block text-sm"
+													>{opt.subtitle}</span
+												>
+											</span>
+										</label>
+									{/each}
+								</div>
+								{#if schedule.cadenceMatch}
+									<p class="text-on-surface-variant mt-2 text-sm">
+										Matches your current trade cadence suggestion ({tradeStyleLabel(
+											SCHEDULE_PRESET_OPTIONS.find((o) => o.value === schedule.suggestedPreset)
+												?.cadence ?? 'balanced'
+										)}).
+									</p>
+								{:else}
+									<p class="text-on-surface-variant mt-2 text-sm">
+										Differs from suggested cadence preset
+										{SCHEDULE_PRESET_OPTIONS.find((o) => o.value === schedule.suggestedPreset)
+											?.label ?? schedule.suggestedPreset}.
+									</p>
+								{/if}
+								{#if schedule.slotsLocal.length}
+									<p class="text-on-surface-variant mt-2 text-sm">
+										Local slots: {schedule.slotsLocal.join(', ')}
+									</p>
+								{/if}
+							</div>
+							<div class="flex items-center justify-between gap-3 px-4 py-3.5">
+								<div class="min-w-0">
+									<p class="text-on-surface text-sm font-medium">Run missed slots</p>
+									<p class="text-on-surface-variant mt-0.5 text-sm">
+										Catch up at most one latest missed run after wake/login — never chains.
+									</p>
+								</div>
+								<label class="text-on-surface flex shrink-0 items-center gap-2 text-sm">
+									<Checkbox>
+										<input
+											type="checkbox"
+											checked={schedule.runMissed}
+											disabled={scheduleBusy}
+											onchange={() => setScheduleRunMissed(!schedule.runMissed)}
+										/>
+									</Checkbox>
+								</label>
+							</div>
+							<div class="px-4 py-3.5">
+								<p class="text-on-surface text-sm font-medium">Manual command</p>
+								<p class="text-on-surface-variant mt-0.5 text-sm">
+									For a custom OS schedule, point Task Scheduler / cron / launchd at this
+									app executable (not your workspace folder):
+								</p>
+								<code
+									class="bg-surface text-on-surface mt-2 block overflow-x-auto rounded-lg px-3 py-2 text-xs break-all"
+								>
+									{schedule.runCommand}
+								</code>
+								<div class="mt-2">
+									<Button variant="text" click={copyRunCommand}>
+										{copiedCommand ? 'Copied' : 'Copy command'}
+									</Button>
+								</div>
+							</div>
+						</div>
+						{#if scheduleMessage || schedule.error}
+							<p class="text-on-surface-variant mt-3 text-sm leading-relaxed">
+								{scheduleMessage ?? schedule.error}
+							</p>
+						{/if}
 					{/if}
 				</section>
 

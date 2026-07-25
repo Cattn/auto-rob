@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AutoRobApi, HarnessId, OnboardingAnswers, RunEvent } from "../shared/ipc";
+import type {
+	AutoRobApi,
+	HarnessId,
+	OnboardingAnswers,
+	RunEvent,
+	SchedulePreset,
+} from "../shared/ipc";
 import { IPC } from "../shared/ipc";
 
 const api: AutoRobApi = {
@@ -39,6 +45,15 @@ const api: AutoRobApi = {
 	getConstraints: () => ipcRenderer.invoke(IPC.constraintsGet),
 	setConstraints: (constraints) =>
 		ipcRenderer.invoke(IPC.constraintsSet, constraints),
+	getSchedule: () => ipcRenderer.invoke(IPC.scheduleGet),
+	setScheduleEnabled: (enabled: boolean) =>
+		ipcRenderer.invoke(IPC.scheduleSetEnabled, enabled),
+	setSchedulePaused: (paused: boolean) =>
+		ipcRenderer.invoke(IPC.scheduleSetPaused, paused),
+	setSchedulePreset: (preset: SchedulePreset) =>
+		ipcRenderer.invoke(IPC.scheduleSetPreset, preset),
+	setScheduleRunMissed: (runMissed: boolean) =>
+		ipcRenderer.invoke(IPC.scheduleSetRunMissed, runMissed),
 	onRunEvent: (handler) => {
 		const listener = (_event: Electron.IpcRendererEvent, payload: RunEvent) => {
 			handler(payload);

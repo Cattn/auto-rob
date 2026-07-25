@@ -18,6 +18,8 @@ import type {
 	PromptResetResult,
 	RunStatus,
 	SavedNoteMeta,
+	SchedulePreset,
+	ScheduleStatus,
 	TradeStyle,
 } from "../../shared/ipc";
 
@@ -41,6 +43,8 @@ export type {
 	PromptResetResult,
 	RunStatus,
 	SavedNoteMeta,
+	SchedulePreset,
+	ScheduleStatus,
 	TradeStyle,
 };
 

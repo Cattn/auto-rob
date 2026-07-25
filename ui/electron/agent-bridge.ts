@@ -20,6 +20,9 @@ import type {
 	PromptResetResult,
 	RunEvent,
 	RunStatus,
+	SchedulePreset,
+	ScheduleStatus,
+	TradeStyle,
 } from "../shared/ipc";
 import { IPC } from "../shared/ipc";
 import {
@@ -53,6 +56,18 @@ import {
 	setLongTermPinned,
 	updateLongTermItem,
 } from "../../long-term-library";
+import {
+	decideRunSlot,
+	getScheduleStatus,
+	isSchedulePreset,
+	recordScheduleRun,
+	setScheduleEnabled,
+	setSchedulePaused,
+	setSchedulePreset,
+	setScheduleRunMissed,
+	syncOsSchedule,
+	type SlotDecision,
+} from "./schedule";
 import { loadConstraints, saveConstraints } from "../../constraints";
 import { runPortfolio } from "../../run";
 import {
@@ -776,5 +791,72 @@ export class AgentBridge {
 			killProcessTree(this.child);
 		}
 		return this.getStatus();
+	}
+
+	private async harnessReady(): Promise<boolean> {
+		const list = await this.getHarnesses();
+		return list.some(
+			(h) => h.binaryOk && h.mcpConfigured && h.mcpAuthenticated,
+		);
+	}
+
+	private async currentTradeStyle(): Promise<TradeStyle> {
+		const onboarding = await this.getOnboarding();
+		return onboarding.answers.tradeStyle;
+	}
+
+	async getSchedule(): Promise<ScheduleStatus> {
+		const workspace = await this.ensureRoot();
+		const harnessReady = await this.harnessReady();
+		const tradeStyle = await this.currentTradeStyle();
+		return getScheduleStatus(workspace, { harnessReady, tradeStyle });
+	}
+
+	async syncScheduleOnLaunch(): Promise<void> {
+		const workspace = await this.ensureRoot();
+		const harnessReady = await this.harnessReady();
+		await syncOsSchedule(workspace, harnessReady);
+	}
+
+	async setScheduleEnabled(enabled: boolean): Promise<ScheduleStatus> {
+		const workspace = await this.ensureRoot();
+		const harnessReady = await this.harnessReady();
+		const tradeStyle = await this.currentTradeStyle();
+		return setScheduleEnabled(workspace, enabled, harnessReady, tradeStyle);
+	}
+
+	async setSchedulePaused(paused: boolean): Promise<ScheduleStatus> {
+		const workspace = await this.ensureRoot();
+		const harnessReady = await this.harnessReady();
+		const tradeStyle = await this.currentTradeStyle();
+		return setSchedulePaused(workspace, paused, harnessReady, tradeStyle);
+	}
+
+	async setSchedulePreset(preset: SchedulePreset): Promise<ScheduleStatus> {
+		if (!isSchedulePreset(preset)) {
+			throw new Error(`Invalid schedule preset: ${preset}`);
+		}
+		const workspace = await this.ensureRoot();
+		const harnessReady = await this.harnessReady();
+		const tradeStyle = await this.currentTradeStyle();
+		return setSchedulePreset(workspace, preset, harnessReady, tradeStyle);
+	}
+
+	async setScheduleRunMissed(runMissed: boolean): Promise<ScheduleStatus> {
+		const workspace = await this.ensureRoot();
+		const harnessReady = await this.harnessReady();
+		const tradeStyle = await this.currentTradeStyle();
+		return setScheduleRunMissed(workspace, runMissed, harnessReady, tradeStyle);
+	}
+
+	async decideScheduledRun(catchUp: boolean): Promise<SlotDecision> {
+		const workspace = await this.ensureRoot();
+		const harnessReady = await this.harnessReady();
+		return decideRunSlot(workspace, { catchUp, harnessReady });
+	}
+
+	async recordScheduledRun(slotId: string): Promise<void> {
+		const workspace = await this.ensureRoot();
+		await recordScheduleRun(workspace, slotId);
 	}
 }
