@@ -12,6 +12,7 @@
     "block_instructions": [
       "Block all shell commands, including npm and npx.",
       "Block reading or writing .env files.",
+      "Block reading anything outside this workspace, especially any sibling notes library under ../notes.",
       "Block edits to source files (*.ts, package.json, prompt.md, notes.md) unless the user explicitly asks in notes.md."
     ]
   }
