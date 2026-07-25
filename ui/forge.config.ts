@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createRequire } from "node:module";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerDMG } from "@electron-forge/maker-dmg";
@@ -8,11 +12,42 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
+const require = createRequire(import.meta.url);
+
+function ensureSquirrelVendor() {
+  if (process.platform !== "win32") return;
+
+  if (!process.env.SQUIRREL_TEMP) {
+    const temp = path.join(os.tmpdir(), "SquirrelTemp");
+    fs.mkdirSync(temp, { recursive: true });
+    process.env.SQUIRREL_TEMP = temp;
+  }
+
+  const vendorDir = path.join(
+    path.dirname(require.resolve("electron-winstaller/package.json")),
+    "vendor",
+  );
+  const arch = os.arch();
+  fs.copyFileSync(
+    path.join(vendorDir, `7z-${arch}.exe`),
+    path.join(vendorDir, "7z.exe"),
+  );
+  fs.copyFileSync(
+    path.join(vendorDir, `7z-${arch}.dll`),
+    path.join(vendorDir, "7z.dll"),
+  );
+}
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
   },
   rebuildConfig: {},
+  hooks: {
+    preMake: async () => {
+      ensureSquirrelVendor();
+    },
+  },
   makers: [
     new MakerSquirrel({
       name: "electronSvelte",

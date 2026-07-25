@@ -65,6 +65,7 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "electron",
+      "electron-winstaller",
       "macos-alias",
       "fs-xattr"
     ]
