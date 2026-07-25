@@ -23,6 +23,13 @@ export const IPC = {
 	notesUpdate: "auto-rob:notes:update",
 	notesDelete: "auto-rob:notes:delete",
 	notesSetActive: "auto-rob:notes:set-active",
+	longTermGet: "auto-rob:long-term:get",
+	longTermAdd: "auto-rob:long-term:add",
+	longTermUpdate: "auto-rob:long-term:update",
+	longTermDismiss: "auto-rob:long-term:dismiss",
+	longTermSetPinned: "auto-rob:long-term:set-pinned",
+	constraintsGet: "auto-rob:constraints:get",
+	constraintsSet: "auto-rob:constraints:set",
 } as const;
 
 export type TradeStyle = "more_active" | "balanced" | "less_frequent";
@@ -117,6 +124,42 @@ export type NotesState = {
 	notes: SavedNoteMeta[];
 };
 
+export type LongTermType = "goal" | "watch" | "todo";
+export type LongTermSize = "small" | "medium" | "large";
+export type LongTermSource = "user" | "agent";
+
+export type LongTermItem = {
+	id: string;
+	title: string;
+	type: LongTermType;
+	size: LongTermSize;
+	pinned: boolean;
+	source: LongTermSource;
+	added: string;
+	checkAfter: string | null;
+	rationale: string;
+};
+
+export type LongTermState = {
+	items: LongTermItem[];
+};
+
+export type LongTermUserFields = {
+	title?: string;
+	type?: LongTermType;
+	size?: LongTermSize;
+	checkAfter?: string | null;
+	rationale?: string;
+	pinned?: boolean;
+};
+
+export type Constraints = {
+	neverTrade: string[];
+	doNotSell: string[];
+	maxPositionPct: number | null;
+	notes: string;
+};
+
 export type AutoRobApi = {
 	getHealth: () => Promise<HealthInfo>;
 	getRunStatus: () => Promise<RunStatus>;
@@ -149,5 +192,19 @@ export type AutoRobApi = {
 	) => Promise<NotesState>;
 	deleteSavedNote: (id: string) => Promise<NotesState>;
 	setActiveNote: (id: string) => Promise<NotesState>;
+	getLongTerm: () => Promise<LongTermState>;
+	addLongTermItem: (input: {
+		title: string;
+		type?: LongTermType;
+		size?: LongTermSize;
+		checkAfter?: string | null;
+		rationale?: string;
+		pinned?: boolean;
+	}) => Promise<LongTermState>;
+	updateLongTermItem: (id: string, fields: LongTermUserFields) => Promise<LongTermState>;
+	dismissLongTermItem: (id: string) => Promise<LongTermState>;
+	setLongTermPinned: (id: string, pinned: boolean) => Promise<LongTermState>;
+	getConstraints: () => Promise<Constraints>;
+	setConstraints: (constraints: Constraints) => Promise<Constraints>;
 	onRunEvent: (handler: (event: RunEvent) => void) => () => void;
 };

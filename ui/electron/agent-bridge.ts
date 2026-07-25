@@ -3,10 +3,15 @@ import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { app, BrowserWindow } from "electron";
 import type {
+	Constraints,
 	HarnessConnection,
 	HarnessId,
 	HarnessModels,
 	HealthInfo,
+	LongTermSize,
+	LongTermState,
+	LongTermType,
+	LongTermUserFields,
 	NotesState,
 	NtfySettings,
 	OnboardingAnswers,
@@ -41,6 +46,14 @@ import {
 	setActiveNote,
 	updateSavedNote,
 } from "../../notes-library";
+import {
+	addLongTermItem,
+	dismissLongTermItem,
+	loadLongTerm,
+	setLongTermPinned,
+	updateLongTermItem,
+} from "../../long-term-library";
+import { loadConstraints, saveConstraints } from "../../constraints";
 import { runPortfolio } from "../../run";
 import {
 	ensureWorkspaceSeeded,
@@ -478,6 +491,51 @@ export class AgentBridge {
 		} catch {
 			return null;
 		}
+	}
+
+	async getLongTerm(): Promise<LongTermState> {
+		const workspace = await this.ensureRoot();
+		return loadLongTerm(workspace);
+	}
+
+	async addLongTermItem(input: {
+		title: string;
+		type?: LongTermType;
+		size?: LongTermSize;
+		checkAfter?: string | null;
+		rationale?: string;
+		pinned?: boolean;
+	}): Promise<LongTermState> {
+		const workspace = await this.ensureRoot();
+		return addLongTermItem(workspace, input);
+	}
+
+	async updateLongTermItem(
+		id: string,
+		fields: LongTermUserFields,
+	): Promise<LongTermState> {
+		const workspace = await this.ensureRoot();
+		return updateLongTermItem(workspace, id, fields);
+	}
+
+	async dismissLongTermItem(id: string): Promise<LongTermState> {
+		const workspace = await this.ensureRoot();
+		return dismissLongTermItem(workspace, id);
+	}
+
+	async setLongTermPinned(id: string, pinned: boolean): Promise<LongTermState> {
+		const workspace = await this.ensureRoot();
+		return setLongTermPinned(workspace, id, pinned);
+	}
+
+	async getConstraints(): Promise<Constraints> {
+		const workspace = await this.ensureRoot();
+		return loadConstraints(workspace);
+	}
+
+	async setConstraints(constraints: Constraints): Promise<Constraints> {
+		const workspace = await this.ensureRoot();
+		return saveConstraints(workspace, constraints);
 	}
 
 	async getNotes(): Promise<NotesState> {

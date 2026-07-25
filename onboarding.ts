@@ -17,6 +17,7 @@ export const ONBOARDING_CLI_JSON = {
       "Write(long-term.md)",
       "Write(notes.md)",
       "Write(onboarding.json)",
+      "Write(constraints.json)",
       "Write(auto-rob.config.json)",
       "Write(.env)",
       "Write(.env*)",

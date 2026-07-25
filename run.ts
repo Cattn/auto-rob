@@ -10,6 +10,12 @@ import {
   SENT_MARKER,
 } from "./notify.js";
 import { getActiveHarness, getActiveHarnessId } from "./harness/index.js";
+import {
+  formatConstraintsSection,
+  hasConstraints,
+  loadConstraints,
+  type Constraints,
+} from "./constraints.js";
 
 export const LOG_FILE = "run-log.md";
 export const LONG_TERM_FILE = "long-term.md";
@@ -91,8 +97,20 @@ export function buildPrompt(
   priorLog: string | null,
   longTerm: string | null,
   userNotes: string | null,
+  constraints: Constraints | null = null,
 ): string {
   const sections = [base.trim(), ""];
+
+  if (constraints && hasConstraints(constraints)) {
+    sections.push(
+      "## Hard constraints (owner-enforced)",
+      "These are hard rules from the account owner. They override conflicting soft goals, notes, and long-term items.",
+      "Do not invent extra constraints beyond this list. Obey them for this entire run.",
+      "",
+      formatConstraintsSection(constraints),
+      "",
+    );
+  }
 
   if (userNotes) {
     sections.push(
@@ -109,7 +127,8 @@ export function buildPrompt(
       "## Long-term continuity (auto-included)",
       "Below is `long-term.md`: durable goals, multi-run todos, and high-signal watches.",
       "Treat as standing guidance across runs. Do not overwrite the file wholesale — only add high-confidence items, and remove entries that are done or irrelevant.",
-      "It does not override the instructions above.",
+      "Items with `pinned: true` are high priority / focus for this run. Preserve `source: user` items.",
+      "Hard constraints above override any conflicting long-term item. Otherwise these do not override the standing instructions above.",
       "",
       "```",
       longTerm,
@@ -119,7 +138,7 @@ export function buildPrompt(
   } else {
     sections.push(
       "## Long-term continuity (auto-included)",
-      "No `long-term.md` was found yet. Create it only when you have a high-confidence, multi-run goal or watch worth recording.",
+      "No `long-term.md` was found yet. Create it only when you have a high-confidence, multi-run goal or watch worth recording. Use the required `## lt_<id>` item format from the standing instructions.",
       "",
     );
   }
@@ -153,12 +172,19 @@ export async function runPortfolio(
   await loadEnvFile(workspace);
   await clearNotifyArtifacts(workspace);
   const basePrompt = await readFile(path.join(workspace, "prompt.md"), "utf8");
-  const [priorLog, longTerm, userNotes] = await Promise.all([
+  const [priorLog, longTerm, userNotes, constraints] = await Promise.all([
     readOptionalMarkdown(workspace, LOG_FILE),
     readOptionalMarkdown(workspace, LONG_TERM_FILE),
     readOptionalMarkdown(workspace, NOTES_FILE),
+    loadConstraints(workspace),
   ]);
-  const prompt = buildPrompt(basePrompt, priorLog, longTerm, userNotes);
+  const prompt = buildPrompt(
+    basePrompt,
+    priorLog,
+    longTerm,
+    userNotes,
+    constraints,
+  );
   const promptPath = path.join(workspace, RUN_PROMPT_FILE);
   await writeFile(promptPath, prompt, "utf8");
 

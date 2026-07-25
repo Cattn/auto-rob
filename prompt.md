@@ -56,14 +56,31 @@ Rules:
 1. **Only add when confident it matters.** Add long-term goals, todos, or watches only if they are clearly interesting and worth tracking across runs. Skip minor, one-off, or low-conviction noise — those belong in `run-log.md` (or nowhere).
 2. **Do not overwrite live entries.** Keep existing items intact. Only remove an entry when it is completed, invalidated, or no longer relevant. When removing, drop it entirely (do not leave a graveyard of done items).
 3. **Pass through broader goals.** This file is the consistent continuity layer for multi-run intent (e.g. build toward N positions, watch a sector theme, wait for a catalyst). Future agents should treat it as standing guidance alongside the run log.
-4. **Date entries.** Include an added/updated date (ISO or clear local date) on each item so later agents know how fresh it is. Something just added is usually not urgent to act on yet.
-5. **Brief rationale + size.** For each item, include a short why it matters and a sense of scale (e.g. small watch, medium goal, large portfolio-shaping objective).
+4. **Preserve user items.** Entries with `source: user` were added by the account owner. Do not delete or rewrite them unless clearly completed/invalidated. Prefer updating your own (`source: agent`) items.
+5. **Honor pins.** Items with `pinned: true` are high priority / focus. Weight them heavily in research and decisions this run.
+6. **Use the required item format only.** Each item is a `## lt_<id>` block with the fields below. When creating a new item, generate a fresh id like `lt_` plus 12 hex characters. Keep the `# Long-term` file header.
 
-Suggested shape per item:
-- Date added (and last reviewed if useful)
-- Goal / watch / todo (one line)
-- Size: small | medium | large
-- Rationale (1–2 short sentences)
-- Check-after date when useful (e.g. earnings date, catalyst, or "revisit after YYYY-MM-DD") — so later agents know when action or re-evaluation is actually due
+Required shape per item:
+```
+## lt_01abcdef0123
+- title: Build toward 6 positions
+- type: goal
+- size: medium
+- pinned: false
+- source: agent
+- added: 2026-07-24
+- check_after: 2026-08-01
+- rationale: Under-diversified vs standing goals
+```
+
+Field rules:
+- `title` — one line
+- `type` — `goal` | `watch` | `todo`
+- `size` — `small` | `medium` | `large`
+- `pinned` — `true` | `false`
+- `source` — `agent` for items you add; never set `source: user`
+- `added` — ISO date `YYYY-MM-DD`
+- `check_after` — optional ISO date when useful
+- `rationale` — 1–2 short sentences
 
 Create `long-term.md` if missing and you have something worth recording. If nothing qualifies, leave the file unchanged (or create an empty stub only if it does not exist and you have nothing to add — prefer leaving it absent until the first real entry).
