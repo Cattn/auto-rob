@@ -92,7 +92,6 @@ export type HealthInfo = {
 	agentPath: string | null;
 	agentVersion: string | null;
 	ntfyConfigured: boolean;
-	fakeRuns: boolean;
 	error: string | null;
 	activeHarness: HarnessId;
 	harnesses: HarnessConnection[];
@@ -110,7 +109,6 @@ export type RunStatus = {
 	message: string;
 	startedAt: number | null;
 	exitCode: number | null;
-	fake: boolean;
 };
 
 export type RunEvent =

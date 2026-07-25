@@ -165,10 +165,6 @@ function killProcessTree(child: ChildProcess): void {
 	}
 }
 
-function fakeRunsEnabled(): boolean {
-	return process.env.AUTO_ROB_REAL_RUNS !== "1";
-}
-
 function pathExists(filePath: string): Promise<boolean> {
 	return access(filePath).then(
 		() => true,
@@ -206,8 +202,6 @@ export class AgentBridge {
 	private workspaceRoot: string | null = null;
 	private child: ChildProcess | null = null;
 	private abort: AbortController | null = null;
-	private fakeTimers: ReturnType<typeof setTimeout>[] = [];
-	private runningFake = false;
 	private stopping = false;
 	private runTask: Promise<void> | null = null;
 	private harnessesCache: { at: number; data: HarnessConnection[] } | null = null;
@@ -217,7 +211,6 @@ export class AgentBridge {
 		message: "Ready",
 		startedAt: null,
 		exitCode: null,
-		fake: fakeRunsEnabled(),
 	};
 
 	async ensureRoot(): Promise<string> {
@@ -260,14 +253,8 @@ export class AgentBridge {
 		}
 	}
 
-	private clearFakeTimers() {
-		for (const timer of this.fakeTimers) clearTimeout(timer);
-		this.fakeTimers = [];
-		this.runningFake = false;
-	}
-
 	private isBusy(): boolean {
-		return this.runTask !== null || this.runningFake;
+		return this.runTask !== null;
 	}
 
 	private invalidateHarnessCache() {
@@ -454,7 +441,6 @@ export class AgentBridge {
 	}
 
 	async getHealth(): Promise<HealthInfo> {
-		const fakeRuns = fakeRunsEnabled();
 		try {
 			const repoRoot = await this.ensureRoot();
 			const [activeHarness, harnesses] = await Promise.all([
@@ -469,7 +455,6 @@ export class AgentBridge {
 				agentPath: active?.binaryPath ?? null,
 				agentVersion: active?.binaryOk ? active.id : null,
 				ntfyConfigured: isNtfyConfigured(),
-				fakeRuns,
 				error: ok ? null : (active?.error ?? "Active harness CLI not found"),
 				activeHarness,
 				harnesses,
@@ -487,7 +472,6 @@ export class AgentBridge {
 				agentPath: null,
 				agentVersion: null,
 				ntfyConfigured: isNtfyConfigured(),
-				fakeRuns,
 				error: err instanceof Error ? err.message : String(err),
 				activeHarness: "cursor",
 				harnesses: [],
@@ -590,32 +574,100 @@ export class AgentBridge {
 	}
 
 	async startRun(): Promise<RunStatus> {
-		bridgeLog(
-			"startRun requested",
-			`busy=${this.isBusy()}`,
-			`fake=${fakeRunsEnabled()}`,
-			`AUTO_ROB_REAL_RUNS=${process.env.AUTO_ROB_REAL_RUNS ?? "(unset)"}`,
-		);
+		bridgeLog("startRun requested", `busy=${this.isBusy()}`);
 		if (this.isBusy()) {
 			bridgeWarn("startRun ignored — already busy", this.getStatus());
 			return this.getStatus();
 		}
 
-		if (fakeRunsEnabled()) {
-			bridgeLog("starting fake/dry run");
-			return this.startFakeRun();
-		}
-
 		try {
-			return await this.startRealRun();
+			const workspace = await this.ensureRoot();
+			this.stopping = false;
+			this.abort = new AbortController();
+			bridgeLog("starting run (in-process)", `workspace=${workspace}`);
+			this.emit({ type: "log", line: `Starting run in ${workspace}` });
+
+			this.setStatus({
+				state: "running",
+				message: "Starting portfolio run…",
+				startedAt: Date.now(),
+				exitCode: null,
+			});
+
+			const restoreLogs = this.installLogCapture();
+			const abort = this.abort;
+
+			this.runTask = (async () => {
+				try {
+					const code = await runPortfolio(workspace, {
+						signal: abort.signal,
+						onSpawn: (child) => {
+							this.child = child;
+							bridgeLog("harness child pid=", child.pid ?? "(none)");
+						},
+					});
+					const wasStopping = this.stopping;
+					this.child = null;
+					this.abort = null;
+					this.stopping = false;
+					if (wasStopping) {
+						this.setStatus({
+							state: "idle",
+							message: "Stopped mid-run",
+							exitCode: null,
+						});
+						return;
+					}
+					if (code !== 0) {
+						const message = `Run failed (exit ${code})`;
+						this.emit({ type: "log", line: message });
+						this.setStatus({
+							state: "failed",
+							message,
+							exitCode: code,
+						});
+						return;
+					}
+					this.setStatus({
+						state: "idle",
+						message: "Run finished",
+						exitCode: code,
+					});
+				} catch (err) {
+					this.child = null;
+					this.abort = null;
+					const wasStopping = this.stopping;
+					this.stopping = false;
+					if (wasStopping) {
+						this.setStatus({
+							state: "idle",
+							message: "Stopped mid-run",
+							exitCode: null,
+						});
+						return;
+					}
+					const message = err instanceof Error ? err.message : String(err);
+					bridgeError("runPortfolio failed", err);
+					this.emit({ type: "log", line: `ERROR: ${message}` });
+					this.setStatus({
+						state: "failed",
+						message,
+						exitCode: 1,
+					});
+				} finally {
+					restoreLogs();
+					this.runTask = null;
+				}
+			})();
+
+			return this.getStatus();
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			bridgeError("startRealRun threw", err);
+			bridgeError("startRun threw", err);
 			this.setStatus({
 				state: "failed",
 				message,
 				exitCode: 1,
-				fake: false,
 			});
 			this.emit({ type: "log", line: `ERROR: ${message}` });
 			return this.getStatus();
@@ -625,153 +677,10 @@ export class AgentBridge {
 	async startRunAndWait(): Promise<RunStatus> {
 		const status = await this.startRun();
 		if (this.runTask) await this.runTask;
-		while (this.runningFake) {
-			await new Promise((r) => setTimeout(r, 100));
-		}
 		return this.getStatus() ?? status;
 	}
 
-	private startFakeRun(): RunStatus {
-		this.runningFake = true;
-		this.setStatus({
-			state: "running",
-			message: "[fake] Starting dry run…",
-			startedAt: Date.now(),
-			exitCode: null,
-			fake: true,
-		});
-
-		const steps: Array<{ at: number; message: string; log?: string }> = [
-			{ at: 400, message: "[fake] Checking portfolio…", log: "-> get_portfolio()" },
-			{ at: 1100, message: "[fake] Scanning watchlist…", log: "-> get_watchlist_items()" },
-			{ at: 2000, message: "[fake] No trades (dry run)", log: "-> skip place_equity_order" },
-		];
-
-		for (const step of steps) {
-			this.fakeTimers.push(
-				setTimeout(() => {
-					if (!this.runningFake) return;
-					if (step.log) this.emit({ type: "log", line: step.log });
-					this.setStatus({ message: step.message });
-				}, step.at),
-			);
-		}
-
-		this.fakeTimers.push(
-			setTimeout(() => {
-				if (!this.runningFake) return;
-				this.runningFake = false;
-				this.fakeTimers = [];
-				this.setStatus({
-					state: "idle",
-					message: "[fake] Dry run finished · no trades",
-					exitCode: 0,
-					fake: true,
-				});
-			}, 2800),
-		);
-
-		return this.getStatus();
-	}
-
-	private async startRealRun(): Promise<RunStatus> {
-		const workspace = await this.ensureRoot();
-		this.stopping = false;
-		this.abort = new AbortController();
-		bridgeLog("starting REAL run (in-process)", `workspace=${workspace}`);
-		this.emit({ type: "log", line: `Starting real run in ${workspace}` });
-
-		this.setStatus({
-			state: "running",
-			message: "Starting portfolio run…",
-			startedAt: Date.now(),
-			exitCode: null,
-			fake: false,
-		});
-
-		const restoreLogs = this.installLogCapture();
-		const abort = this.abort;
-
-		this.runTask = (async () => {
-			try {
-				const code = await runPortfolio(workspace, {
-					signal: abort.signal,
-					onSpawn: (child) => {
-						this.child = child;
-						bridgeLog("harness child pid=", child.pid ?? "(none)");
-					},
-				});
-				const wasStopping = this.stopping;
-				this.child = null;
-				this.abort = null;
-				this.stopping = false;
-				if (wasStopping) {
-					this.setStatus({
-						state: "idle",
-						message: "Stopped mid-run",
-						exitCode: null,
-						fake: false,
-					});
-					return;
-				}
-				if (code !== 0) {
-					const message = `Run failed (exit ${code})`;
-					this.emit({ type: "log", line: message });
-					this.setStatus({
-						state: "failed",
-						message,
-						exitCode: code,
-					});
-					return;
-				}
-				this.setStatus({
-					state: "idle",
-					message: "Run finished",
-					exitCode: code,
-				});
-			} catch (err) {
-				this.child = null;
-				this.abort = null;
-				const wasStopping = this.stopping;
-				this.stopping = false;
-				if (wasStopping) {
-					this.setStatus({
-						state: "idle",
-						message: "Stopped mid-run",
-						exitCode: null,
-						fake: false,
-					});
-					return;
-				}
-				const message = err instanceof Error ? err.message : String(err);
-				bridgeError("runPortfolio failed", err);
-				this.emit({ type: "log", line: `ERROR: ${message}` });
-				this.setStatus({
-					state: "failed",
-					message,
-					exitCode: 1,
-				});
-			} finally {
-				restoreLogs();
-				this.runTask = null;
-			}
-		})();
-
-		return this.getStatus();
-	}
-
 	async stopRun(): Promise<RunStatus> {
-		if (this.runningFake) {
-			this.clearFakeTimers();
-			this.setStatus({
-				state: "idle",
-				message: "[fake] Stopped dry run",
-				exitCode: null,
-				fake: true,
-			});
-			return this.getStatus();
-		}
-
 		if (!this.runTask && !this.child) {
 			return this.getStatus();
 		}
@@ -784,7 +693,6 @@ export class AgentBridge {
 		this.setStatus({
 			state: "running",
 			message: "Stopping…",
-			fake: false,
 		});
 		this.abort?.abort();
 		if (this.child) {
