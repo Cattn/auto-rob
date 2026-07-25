@@ -4,12 +4,14 @@ import type {
 	HarnessId,
 	HarnessModels,
 	HealthInfo,
+	NotesState,
 	NtfySettings,
 	OnboardingAnswers,
 	OnboardingApplyResult,
 	OnboardingState,
 	PromptResetResult,
 	RunStatus,
+	SavedNoteMeta,
 	TradeStyle,
 } from "../../shared/ipc";
 
@@ -19,12 +21,14 @@ export type {
 	HarnessId,
 	HarnessModels,
 	HealthInfo,
+	NotesState,
 	NtfySettings,
 	OnboardingAnswers,
 	OnboardingApplyResult,
 	OnboardingState,
 	PromptResetResult,
 	RunStatus,
+	SavedNoteMeta,
 	TradeStyle,
 };
 

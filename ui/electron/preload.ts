@@ -23,6 +23,12 @@ const api: AutoRobApi = {
 		ipcRenderer.invoke(IPC.setHarnessModel, id, model),
 	getNtfySettings: () => ipcRenderer.invoke(IPC.ntfyGet),
 	setNtfySettings: (settings) => ipcRenderer.invoke(IPC.ntfySet, settings),
+	getNotes: () => ipcRenderer.invoke(IPC.notesGet),
+	saveActiveNote: (content) => ipcRenderer.invoke(IPC.notesSaveActive, content),
+	createSavedNote: (opts) => ipcRenderer.invoke(IPC.notesCreate, opts),
+	updateSavedNote: (id, opts) => ipcRenderer.invoke(IPC.notesUpdate, id, opts),
+	deleteSavedNote: (id) => ipcRenderer.invoke(IPC.notesDelete, id),
+	setActiveNote: (id) => ipcRenderer.invoke(IPC.notesSetActive, id),
 	onRunEvent: (handler) => {
 		const listener = (_event: Electron.IpcRendererEvent, payload: RunEvent) => {
 			handler(payload);

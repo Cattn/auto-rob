@@ -7,6 +7,7 @@ import type {
 	HarnessId,
 	HarnessModels,
 	HealthInfo,
+	NotesState,
 	NtfySettings,
 	OnboardingAnswers,
 	OnboardingApplyResult,
@@ -32,6 +33,14 @@ import {
 	resetPromptToDefault,
 	saveOnboarding,
 } from "../../onboarding";
+import {
+	createSavedNote,
+	deleteSavedNote,
+	getNotesState,
+	saveActiveNote,
+	setActiveNote,
+	updateSavedNote,
+} from "../../notes-library";
 import { runPortfolio } from "../../run";
 import {
 	ensureWorkspaceSeeded,
@@ -469,6 +478,42 @@ export class AgentBridge {
 		} catch {
 			return null;
 		}
+	}
+
+	async getNotes(): Promise<NotesState> {
+		const workspace = await this.ensureRoot();
+		return getNotesState(workspace);
+	}
+
+	async saveActiveNote(content: string): Promise<NotesState> {
+		const workspace = await this.ensureRoot();
+		return saveActiveNote(workspace, content);
+	}
+
+	async createSavedNote(opts?: {
+		title?: string;
+		content?: string;
+	}): Promise<NotesState> {
+		const workspace = await this.ensureRoot();
+		return createSavedNote(workspace, opts);
+	}
+
+	async updateSavedNote(
+		id: string,
+		opts: { title?: string; content?: string },
+	): Promise<NotesState> {
+		const workspace = await this.ensureRoot();
+		return updateSavedNote(workspace, id, opts);
+	}
+
+	async deleteSavedNote(id: string): Promise<NotesState> {
+		const workspace = await this.ensureRoot();
+		return deleteSavedNote(workspace, id);
+	}
+
+	async setActiveNote(id: string): Promise<NotesState> {
+		const workspace = await this.ensureRoot();
+		return setActiveNote(workspace, id);
 	}
 
 	async startRun(): Promise<RunStatus> {
