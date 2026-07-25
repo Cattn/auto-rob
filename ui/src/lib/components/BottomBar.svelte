@@ -13,12 +13,11 @@
 	let connected = $state(false);
 	let busy = $state(false);
 	let scheduleBusy = $state(false);
-	let fake = $state(true);
 
 	const statusLabel = $derived(
 		{
 			idle: 'Idle',
-			running: fake ? 'Fake run' : 'Running',
+			running: 'Running',
 			failed: 'Failed',
 			market_closed: 'Market closed',
 			offline: 'Offline'
@@ -48,7 +47,6 @@
 	function applyStatus(run: RunStatus) {
 		status = run.state;
 		lastOutcome = run.message;
-		fake = run.fake;
 	}
 
 	function applySchedule(s: ScheduleStatus) {
@@ -129,7 +127,6 @@
 				]);
 				applyStatus(run);
 				applySchedule(schedule);
-				fake = health.fakeRuns;
 				if (run.state === 'idle' && run.message === 'Ready') {
 					const harnessLabel =
 						health.harnesses.find((h) => h.id === health.activeHarness)?.label ??
@@ -137,10 +134,8 @@
 					if (!health.ok) {
 						lastOutcome = health.error ?? 'Agent not found';
 						status = 'failed';
-					} else if (health.fakeRuns) {
-						lastOutcome = `Fake runs on · ${harnessLabel}`;
 					} else {
-						lastOutcome = `REAL runs · ${harnessLabel}`;
+						lastOutcome = `Ready · ${harnessLabel}`;
 					}
 				}
 				const log = await api.readRepoFile('run-log.md');

@@ -105,7 +105,6 @@ function registerIpc() {
 app.on("ready", () => {
 	if (started) return;
 	if (runOnce) {
-		process.env.AUTO_ROB_REAL_RUNS = "1";
 		void (async () => {
 			try {
 				const decision = await bridge.decideScheduledRun(catchUp);
