@@ -29,6 +29,16 @@ const api: AutoRobApi = {
 	updateSavedNote: (id, opts) => ipcRenderer.invoke(IPC.notesUpdate, id, opts),
 	deleteSavedNote: (id) => ipcRenderer.invoke(IPC.notesDelete, id),
 	setActiveNote: (id) => ipcRenderer.invoke(IPC.notesSetActive, id),
+	getLongTerm: () => ipcRenderer.invoke(IPC.longTermGet),
+	addLongTermItem: (input) => ipcRenderer.invoke(IPC.longTermAdd, input),
+	updateLongTermItem: (id, fields) =>
+		ipcRenderer.invoke(IPC.longTermUpdate, id, fields),
+	dismissLongTermItem: (id) => ipcRenderer.invoke(IPC.longTermDismiss, id),
+	setLongTermPinned: (id, pinned) =>
+		ipcRenderer.invoke(IPC.longTermSetPinned, id, pinned),
+	getConstraints: () => ipcRenderer.invoke(IPC.constraintsGet),
+	setConstraints: (constraints) =>
+		ipcRenderer.invoke(IPC.constraintsSet, constraints),
 	onRunEvent: (handler) => {
 		const listener = (_event: Electron.IpcRendererEvent, payload: RunEvent) => {
 			handler(payload);

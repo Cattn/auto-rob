@@ -66,6 +66,21 @@ function registerIpc() {
 	);
 	ipcMain.handle(IPC.notesDelete, (_event, id: string) => bridge.deleteSavedNote(id));
 	ipcMain.handle(IPC.notesSetActive, (_event, id: string) => bridge.setActiveNote(id));
+	ipcMain.handle(IPC.longTermGet, () => bridge.getLongTerm());
+	ipcMain.handle(IPC.longTermAdd, (_event, input) => bridge.addLongTermItem(input));
+	ipcMain.handle(IPC.longTermUpdate, (_event, id: string, fields) =>
+		bridge.updateLongTermItem(id, fields),
+	);
+	ipcMain.handle(IPC.longTermDismiss, (_event, id: string) =>
+		bridge.dismissLongTermItem(id),
+	);
+	ipcMain.handle(IPC.longTermSetPinned, (_event, id: string, pinned: boolean) =>
+		bridge.setLongTermPinned(id, pinned),
+	);
+	ipcMain.handle(IPC.constraintsGet, () => bridge.getConstraints());
+	ipcMain.handle(IPC.constraintsSet, (_event, constraints) =>
+		bridge.setConstraints(constraints),
+	);
 }
 
 app.on("ready", () => {
