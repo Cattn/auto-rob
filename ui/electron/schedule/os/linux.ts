@@ -68,6 +68,21 @@ function stripManaged(crontab: string): string {
 	return out.join("\n");
 }
 
+function cronLinesForTimes(locals: LocalParts[], command: string): string[] {
+	const byMinute = new Map<number, number[]>();
+	for (const local of locals) {
+		const hours = byMinute.get(local.minute) ?? [];
+		if (!hours.includes(local.hour)) hours.push(local.hour);
+		byMinute.set(local.minute, hours);
+	}
+	return [...byMinute.entries()]
+		.sort((a, b) => a[0] - b[0])
+		.map(([minute, hours]) => {
+			hours.sort((a, b) => a - b);
+			return `${minute} ${hours.join(",")} * * 1-5 ${command}`;
+		});
+}
+
 function buildManagedBlock(preset: SchedulePreset, runMissed: boolean): string {
 	const cmd = resolveRunCommand(false);
 	const catchUp = resolveRunCommand(true);
@@ -75,12 +90,10 @@ function buildManagedBlock(preset: SchedulePreset, runMissed: boolean): string {
 	const catchUpCommand = [catchUp.command, ...catchUp.args]
 		.map(quoteShell)
 		.join(" ");
-	const lines = [BEGIN];
-	for (const local of uniqueLocalTimes(localTriggerTimes(preset))) {
-		lines.push(
-			`${local.minute} ${local.hour} * * 1-5 ${command}`,
-		);
-	}
+	const lines = [
+		BEGIN,
+		...cronLinesForTimes(uniqueLocalTimes(localTriggerTimes(preset)), command),
+	];
 	if (runMissed) {
 		lines.push(`@reboot ${catchUpCommand}`);
 	}
