@@ -24,7 +24,19 @@
 	} = $props();
 
 	let connectingId = $state<HarnessId | null>(null);
-	let connectMessage = $state<string | null>(null);
+	let connectError = $state<string | null>(null);
+	let pendingBrowserId = $state<HarnessId | null>(null);
+
+	const browserOpenedMessage =
+		'Browser opened — finish Robinhood login in the browser, then return here.';
+
+	const connectMessage = $derived.by(() => {
+		if (connectError) return connectError;
+		if (!pendingBrowserId) return null;
+		const match = harnesses.find((h) => h.id === pendingBrowserId);
+		if (match?.mcpConfigured && match.mcpAuthenticated) return null;
+		return browserOpenedMessage;
+	});
 
 	function statusText(h: HarnessConnection): string {
 		if (!h.binaryOk) return 'CLI missing';
@@ -47,14 +59,15 @@
 		const api = getBackend();
 		if (!api || connectingId) return;
 		connectingId = id;
-		connectMessage = null;
+		connectError = null;
+		pendingBrowserId = null;
 		try {
-			await api.connectHarness(id);
-			connectMessage =
-				'Browser opened — finish Robinhood login in the browser, then return here.';
+			const status = await api.connectHarness(id);
+			pendingBrowserId =
+				status.mcpConfigured && status.mcpAuthenticated ? null : id;
 			onrefresh?.();
 		} catch (err) {
-			connectMessage = err instanceof Error ? err.message : String(err);
+			connectError = err instanceof Error ? err.message : String(err);
 		} finally {
 			connectingId = null;
 		}
@@ -95,13 +108,17 @@
 						>
 							{statusText(h)}
 						</span>
-						{#if needsConnect(h)}
+						{#if h.binaryOk}
 							<Button
 								variant="filled"
 								disabled={connectingId !== null}
 								click={() => connect(h.id)}
 							>
-								{connectingId === h.id ? 'Connecting…' : 'Connect'}
+								{connectingId === h.id
+									? 'Connecting…'
+									: needsConnect(h)
+										? 'Connect'
+										: 'Reconnect'}
 							</Button>
 						{/if}
 					</div>

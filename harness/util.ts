@@ -1,8 +1,44 @@
 import spawn from "cross-spawn";
+import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { access } from "node:fs/promises";
 
 export const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
 export const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
+
+export function killProcessTree(child: ChildProcess): void {
+  const pid = child.pid;
+  if (!pid) {
+    try {
+      child.kill();
+    } catch {
+      // ignore
+    }
+    return;
+  }
+  if (process.platform === "win32") {
+    nodeSpawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+      windowsHide: true,
+      stdio: "ignore",
+      shell: false,
+    }).on("error", () => {
+      try {
+        child.kill();
+      } catch {
+        // ignore
+      }
+    });
+    return;
+  }
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // ignore
+    }
+  }
+}
 
 export function pathExists(filePath: string): Promise<boolean> {
   return access(filePath).then(

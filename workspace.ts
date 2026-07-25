@@ -98,17 +98,18 @@ export async function ensureWorkspaceSeeded(
       ? defaults.configJson
       : `${defaults.configJson}\n`,
   );
-  await writeIfMissing(
-    path.join(workspace, ".cursor", "cli.json"),
-    defaults.cursorCliJson.endsWith("\n")
-      ? defaults.cursorCliJson
-      : `${defaults.cursorCliJson}\n`,
-  );
-  await writeIfMissing(
+  const cliJson = defaults.cursorCliJson.endsWith("\n")
+    ? defaults.cursorCliJson
+    : `${defaults.cursorCliJson}\n`;
+  const permissionsJson = defaults.cursorPermissionsJson.endsWith("\n")
+    ? defaults.cursorPermissionsJson
+    : `${defaults.cursorPermissionsJson}\n`;
+  await mkdir(path.join(workspace, ".cursor"), { recursive: true });
+  await writeFile(path.join(workspace, ".cursor", "cli.json"), cliJson, "utf8");
+  await writeFile(
     path.join(workspace, ".cursor", "permissions.json"),
-    defaults.cursorPermissionsJson.endsWith("\n")
-      ? defaults.cursorPermissionsJson
-      : `${defaults.cursorPermissionsJson}\n`,
+    permissionsJson,
+    "utf8",
   );
   if (defaults.envExample !== undefined) {
     await writeIfMissing(path.join(workspace, ".env"), defaults.envExample);

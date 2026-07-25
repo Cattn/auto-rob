@@ -9,11 +9,12 @@ import {
   type HarnessConnection,
   type HarnessRunInput,
 } from "../types.js";
-import { bold, consumeJsonLines, dim } from "../util.js";
+import { bold, consumeJsonLines, dim, killProcessTree } from "../util.js";
 import {
   enableCursorMcp,
   ensureGlobalMcpJson,
   loginCursorMcp,
+  probeCursorMcpAuthenticated,
   readGlobalMcpConfigured,
   versionOk,
 } from "./mcp.js";
@@ -110,15 +111,22 @@ export function createCursorHarness(workspace: string): AgentHarness {
           };
         }
         const mcpConfigured = await readGlobalMcpConfigured();
+        const mcpAuthenticated = mcpConfigured
+          ? await probeCursorMcpAuthenticated(binaryPath, workspace)
+          : false;
         return {
           id: "cursor",
           label,
           binaryPath,
           binaryOk: true,
           mcpConfigured,
-          mcpAuthenticated: mcpConfigured,
+          mcpAuthenticated,
           model,
-          error: null,
+          error: mcpAuthenticated
+            ? null
+            : mcpConfigured
+              ? "Robinhood MCP needs CLI login (agent mcp login robinhood-trading)"
+              : null,
         };
       } catch (err) {
         return {
@@ -232,7 +240,7 @@ export function createCursorHarness(workspace: string): AgentHarness {
 
       return new Promise<number>((resolve, reject) => {
         const onAbort = () => {
-          child.kill();
+          killProcessTree(child);
         };
         if (input.signal) {
           if (input.signal.aborted) {

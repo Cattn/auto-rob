@@ -8,7 +8,7 @@ import {
   type HarnessConnection,
   type HarnessRunInput,
 } from "../types.js";
-import { consumeJsonLines, dim } from "../util.js";
+import { consumeJsonLines, dim, killProcessTree } from "../util.js";
 import {
   codexConnectForWorkspace,
   codexStatusForWorkspace,
@@ -160,7 +160,7 @@ export function createCodexHarness(workspace: string): AgentHarness {
 
       return new Promise<number>((resolve, reject) => {
         const onAbort = () => {
-          child.kill();
+          killProcessTree(child);
         };
         if (input.signal) {
           if (input.signal.aborted) {

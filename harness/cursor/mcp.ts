@@ -23,6 +23,28 @@ export async function readGlobalMcpConfigured(): Promise<boolean> {
   }
 }
 
+export async function probeCursorMcpAuthenticated(
+  agent: string,
+  workspace: string,
+): Promise<boolean> {
+  const result = await runCommand(
+    agent,
+    ["mcp", "list-tools", MCP_NAME],
+    workspace,
+  );
+  const text = `${result.stdout}\n${result.stderr}`.trim();
+  const lower = text.toLowerCase();
+  if (result.code !== 0) return false;
+  if (
+    lower.includes("requires authentication") ||
+    lower.includes("mcp login") ||
+    lower.includes("needsauth")
+  ) {
+    return false;
+  }
+  return /get_accounts|get_portfolio|place_equity_order/i.test(text);
+}
+
 export async function ensureGlobalMcpJson(): Promise<void> {
   const filePath = globalMcpJsonPath();
   await mkdir(path.dirname(filePath), { recursive: true });

@@ -1,6 +1,6 @@
 import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { app, BrowserWindow } from "electron";
 import type {
 	Constraints,
@@ -34,6 +34,7 @@ import {
 	setActiveHarness,
 	setHarnessModel,
 } from "../../harness/index";
+import { killProcessTree } from "../../harness/util";
 import {
 	applyOnboardingWithAgent,
 	loadOnboarding,
@@ -131,38 +132,6 @@ function shouldIgnoreLogLine(line: string): boolean {
 		line.startsWith("npm warn Unknown env config") ||
 		line.startsWith("cursor-retrieval: tracing to")
 	);
-}
-
-function killProcessTree(child: ChildProcess): void {
-	const pid = child.pid;
-	if (!pid) {
-		child.kill();
-		return;
-	}
-	if (process.platform === "win32") {
-		spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
-			windowsHide: true,
-			stdio: "ignore",
-			shell: false,
-		}).on("error", (err) => {
-			bridgeWarn("taskkill failed, falling back to child.kill()", err);
-			try {
-				child.kill();
-			} catch {
-				// ignore
-			}
-		});
-		return;
-	}
-	try {
-		process.kill(-pid, "SIGTERM");
-	} catch {
-		try {
-			child.kill("SIGTERM");
-		} catch {
-			// ignore
-		}
-	}
 }
 
 function pathExists(filePath: string): Promise<boolean> {
@@ -604,6 +573,10 @@ export class AgentBridge {
 						onSpawn: (child) => {
 							this.child = child;
 							bridgeLog("harness child pid=", child.pid ?? "(none)");
+							if (this.stopping || abort.signal.aborted) {
+								bridgeLog("stop already requested — killing harness child");
+								killProcessTree(child);
+							}
 						},
 					});
 					const wasStopping = this.stopping;

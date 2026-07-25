@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import '../main.css';
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -8,6 +9,7 @@
 	import BottomBar from '$lib/components/BottomBar.svelte';
 	import { getBackend } from '$lib/backend';
 	import { anyRunReady } from '$lib/components/HarnessConnectPanel.svelte';
+	import { ensureRunLogSubscription } from '$lib/run-log.svelte';
 
 	let { children } = $props();
 
@@ -17,6 +19,8 @@
 	function normalizedPath(pathname: string): string {
 		return pathname.replace(/\/$/, '') || '/';
 	}
+
+	onMount(() => ensureRunLogSubscription(getBackend()));
 
 	$effect(() => {
 		const path = normalizedPath(page.url.pathname);
