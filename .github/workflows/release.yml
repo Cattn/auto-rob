@@ -59,7 +59,8 @@ jobs:
             -name '*.dmg' -o \
             -name '*.deb' -o \
             -name '*.rpm' -o \
-            -name '*.AppImage' \
+            -name '*.AppImage' -o \
+            -name '*.zip' \
           \) -exec cp {} ../release-assets/ \;
           echo "Collected assets:"
           ls -la ../release-assets
