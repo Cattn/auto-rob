@@ -285,23 +285,17 @@
 					<HarnessConnectPanel bind:harnesses onrefresh={refresh} />
 				</section>
 
-				<section aria-label="Active harness">
-					<div class="mb-3">
-						<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
-							Active harness
-						</h2>
-						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
-							Choose which installed CLI the next run uses.
-						</p>
-					</div>
-
-					{#if available.length === 0}
-						<div class="bg-surface-container-high ring-outline/50 rounded-xl p-4 ring-1">
-							<p class="text-on-surface-variant text-sm">
-								No harness CLI available yet. Install Cursor or ChatGPT / Codex first.
+				{#if available.length >= 2}
+					<section aria-label="Active harness">
+						<div class="mb-3">
+							<h2 class="text-on-surface-variant text-xs font-semibold tracking-[0.14em] uppercase">
+								Active harness
+							</h2>
+							<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+								Choose which installed CLI the next run uses.
 							</p>
 						</div>
-					{:else}
+
 						<div
 							class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
 							role="radiogroup"
@@ -340,8 +334,8 @@
 								</label>
 							{/each}
 						</div>
-					{/if}
-				</section>
+					</section>
+				{/if}
 
 				<section aria-label="Models">
 					<div class="mb-3">
@@ -747,7 +741,7 @@
 								</div>
 							</div>
 
-							{#if health.error}
+							{#if health.error && health.harnesses.length === 0}
 								<div class="px-3 py-2.5">
 									<p class="text-error text-xs">{health.error}</p>
 								</div>
