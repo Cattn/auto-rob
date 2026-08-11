@@ -25,6 +25,7 @@
 	let focusMessage = $state<string | null>(null);
 	let savingConstraints = $state(false);
 	let addingItem = $state(false);
+	let showingAddItem = $state(false);
 	let busyItemId = $state<string | null>(null);
 	let editingId = $state<string | null>(null);
 	let editTitle = $state('');
@@ -186,6 +187,7 @@
 			newRationale = '';
 			newCheckAfter = '';
 			newPinned = false;
+			showingAddItem = false;
 		} catch (err) {
 			focusMessage = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -361,21 +363,36 @@
 				</section>
 
 				<section
-					class="bg-surface-container order-2 flex min-h-112 flex-col overflow-hidden rounded-2xl lg:col-start-2 lg:row-span-2 lg:min-h-144"
+					class="bg-surface-container order-2 flex h-144 flex-col overflow-hidden rounded-2xl lg:sticky lg:top-8 lg:col-start-2 lg:row-span-2 lg:h-[calc(100dvh-4rem)] lg:max-h-192"
 					aria-label="Long-term focus"
 				>
-					<div class="border-outline/15 flex items-end justify-between gap-3 border-b px-5 py-4">
+					<div
+						class="border-outline/15 flex flex-wrap items-end justify-between gap-3 border-b px-5 py-4"
+					>
 						<div class="min-w-0">
 							<h2 class="text-on-surface text-lg font-semibold tracking-tight">Long-term focus</h2>
 							<p class="text-on-surface-variant mt-0.5 text-sm leading-relaxed">
 								Durable goals and watches that carry across runs.
 							</p>
 						</div>
-						{#if items.length > 0}
-							<span class="text-on-surface-variant shrink-0 text-xs tabular-nums">
-								{items.length} item{items.length === 1 ? '' : 's'}
-							</span>
-						{/if}
+						<div class="flex shrink-0 items-center gap-3">
+							{#if items.length > 0}
+								<span class="text-on-surface-variant text-xs tabular-nums">
+									{items.length} item{items.length === 1 ? '' : 's'}
+								</span>
+							{/if}
+							<Button
+								variant="tonal"
+								disabled={addingItem}
+								aria-expanded={showingAddItem}
+								aria-controls="add-long-term-item"
+								click={() => {
+									showingAddItem = !showingAddItem;
+								}}
+							>
+								{showingAddItem ? 'Close' : 'Add item'}
+							</Button>
+						</div>
 					</div>
 
 					<div class="min-h-0 flex-1 overflow-y-auto">
@@ -533,94 +550,112 @@
 						{/if}
 					</div>
 
-					<div
-						class="border-outline/15 bg-surface-container-high sticky bottom-0 mt-auto flex flex-col gap-3 border-t px-5 py-4"
-					>
-						<p class="text-on-surface text-sm font-medium">Add item</p>
-						<label class="flex flex-col gap-1.5" for="new-title">
-							<span class="text-on-surface text-sm font-medium">Title</span>
-							<input
-								id="new-title"
-								class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
-								type="text"
-								placeholder="Required"
-								bind:value={newTitle}
-								disabled={addingItem}
-							/>
-						</label>
-						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-							<label class="flex flex-col gap-1.5" for="new-type">
-								<span class="text-on-surface text-sm font-medium">Type</span>
-								<select
-									id="new-type"
-									class="bg-surface text-on-surface ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
-									bind:value={newType}
-									disabled={addingItem}
-								>
-									<option value="goal">goal</option>
-									<option value="watch">watch</option>
-									<option value="todo">todo</option>
-								</select>
-							</label>
-							<label class="flex flex-col gap-1.5" for="new-size">
-								<span class="text-on-surface text-sm font-medium">Size</span>
-								<select
-									id="new-size"
-									class="bg-surface text-on-surface ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
-									bind:value={newSize}
-									disabled={addingItem}
-								>
-									<option value="small">small</option>
-									<option value="medium">medium</option>
-									<option value="large">large</option>
-								</select>
-							</label>
-						</div>
-						<label class="flex flex-col gap-1.5" for="new-check">
-							<span class="text-on-surface text-sm font-medium">Check after</span>
-							<input
-								id="new-check"
-								class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
-								type="text"
-								placeholder="YYYY-MM-DD or note"
-								bind:value={newCheckAfter}
-								disabled={addingItem}
-							/>
-						</label>
-						<label class="flex flex-col gap-1.5" for="new-rationale">
-							<span class="text-on-surface text-sm font-medium">Rationale</span>
-							<textarea
-								id="new-rationale"
-								class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary min-h-18 resize-y rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
-								placeholder="Optional context"
-								bind:value={newRationale}
-								disabled={addingItem}
-							></textarea>
-						</label>
-						<label
-							class={[
-								'text-on-surface flex items-center gap-3 text-sm',
-								addingItem ? 'opacity-60' : 'cursor-pointer'
-							]}
+					{#if showingAddItem}
+						<div
+							id="add-long-term-item"
+							class="border-outline/15 bg-surface-container-high flex max-h-[70%] shrink-0 flex-col gap-3 overflow-y-auto border-t px-5 py-4"
 						>
-							<Checkbox>
-								<input type="checkbox" bind:checked={newPinned} disabled={addingItem} />
-							</Checkbox>
-							Pin as focus
-						</label>
-						<div class="flex justify-end">
-							<Button
-								variant="filled"
-								disabled={addingItem || !newTitle.trim()}
-								click={() => addItem()}
+							<p class="text-on-surface text-sm font-medium">Add item</p>
+							<label class="flex flex-col gap-1.5" for="new-title">
+								<span class="text-on-surface text-sm font-medium">Title</span>
+								<input
+									id="new-title"
+									class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+									type="text"
+									placeholder="Required"
+									bind:value={newTitle}
+									disabled={addingItem}
+								/>
+							</label>
+							<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+								<label class="flex flex-col gap-1.5" for="new-type">
+									<span class="text-on-surface text-sm font-medium">Type</span>
+									<select
+										id="new-type"
+										class="bg-surface text-on-surface ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+										bind:value={newType}
+										disabled={addingItem}
+									>
+										<option value="goal">goal</option>
+										<option value="watch">watch</option>
+										<option value="todo">todo</option>
+									</select>
+								</label>
+								<label class="flex flex-col gap-1.5" for="new-size">
+									<span class="text-on-surface text-sm font-medium">Size</span>
+									<select
+										id="new-size"
+										class="bg-surface text-on-surface ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+										bind:value={newSize}
+										disabled={addingItem}
+									>
+										<option value="small">small</option>
+										<option value="medium">medium</option>
+										<option value="large">large</option>
+									</select>
+								</label>
+							</div>
+							<label class="flex flex-col gap-1.5" for="new-check">
+								<span class="text-on-surface text-sm font-medium">Check after</span>
+								<input
+									id="new-check"
+									class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+									type="text"
+									placeholder="YYYY-MM-DD or note"
+									bind:value={newCheckAfter}
+									disabled={addingItem}
+								/>
+							</label>
+							<label class="flex flex-col gap-1.5" for="new-rationale">
+								<span class="text-on-surface text-sm font-medium">Rationale</span>
+								<textarea
+									id="new-rationale"
+									class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary min-h-18 resize-y rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
+									placeholder="Optional context"
+									bind:value={newRationale}
+									disabled={addingItem}
+								></textarea>
+							</label>
+							<label
+								class={[
+									'text-on-surface flex items-center gap-3 text-sm',
+									addingItem ? 'opacity-60' : 'cursor-pointer'
+								]}
 							>
-								{addingItem ? 'Adding…' : 'Add'}
-							</Button>
+								<Checkbox>
+									<input type="checkbox" bind:checked={newPinned} disabled={addingItem} />
+								</Checkbox>
+								Pin as focus
+							</label>
+							<div class="flex justify-end gap-2">
+								<Button
+									variant="text"
+									disabled={addingItem}
+									click={() => {
+										showingAddItem = false;
+									}}
+								>
+									Cancel
+								</Button>
+								<Button
+									variant="filled"
+									disabled={addingItem || !newTitle.trim()}
+									click={() => addItem()}
+								>
+									{addingItem ? 'Adding…' : 'Add'}
+								</Button>
+							</div>
+							{#if focusMessage}
+								<p class="text-on-surface-variant text-sm leading-relaxed">{focusMessage}</p>
+							{/if}
 						</div>
-						{#if focusMessage}
-							<p class="text-on-surface-variant text-sm leading-relaxed">{focusMessage}</p>
-						{/if}
-					</div>
+					{:else if focusMessage}
+						<p
+							class="text-on-surface-variant border-outline/15 border-t px-5 py-3 text-sm leading-relaxed"
+						>
+							{focusMessage}
+						</p>
+					{/if}
 				</section>
 
 				<section
