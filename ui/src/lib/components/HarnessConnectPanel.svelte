@@ -55,6 +55,13 @@
 		return 'Install the ChatGPT / Codex app, then return here.';
 	}
 
+	function showHarnessError(h: HarnessConnection): boolean {
+		if (!h.error) return false;
+		if (!h.binaryOk) return false;
+		if (needsConnect(h) && h.error.startsWith('Robinhood MCP needs CLI login')) return false;
+		return true;
+	}
+
 	async function connect(id: HarnessId) {
 		const api = getBackend();
 		if (!api || connectingId) return;
@@ -87,9 +94,9 @@
 				<div class="flex items-center justify-between gap-3">
 					<div class="min-w-0">
 						<p class="text-on-surface text-sm font-medium">{h.label}</p>
-						<p class="text-on-surface-variant mt-0.5 text-sm">
+						<p class="text-on-surface-variant mt-0.5 text-sm leading-relaxed">
 							{#if !h.binaryOk}
-								CLI binary not found on this machine
+								{installHelp(h)}
 							{:else if needsConnect(h)}
 								Binary ready — finish Robinhood connect
 							{:else}
@@ -123,12 +130,7 @@
 						{/if}
 					</div>
 				</div>
-				{#if !h.binaryOk}
-					<p class="text-on-surface-variant text-sm leading-relaxed">
-						{installHelp(h)}
-					</p>
-				{/if}
-				{#if h.error}
+				{#if showHarnessError(h)}
 					<p class="text-error text-sm">{h.error}</p>
 				{/if}
 			</div>
