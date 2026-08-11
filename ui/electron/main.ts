@@ -55,6 +55,9 @@ function registerIpc() {
 	ipcMain.handle(IPC.runStart, () => bridge.startRun());
 	ipcMain.handle(IPC.runStop, () => bridge.stopRun());
 	ipcMain.handle(IPC.auditLogGet, () => bridge.getAuditLog());
+	ipcMain.handle(IPC.equityQuotesGet, (_event, symbols) =>
+		bridge.getEquityQuotes(symbols),
+	);
 	ipcMain.handle(IPC.readFile, (_event, name: string) => bridge.readRepoFile(name));
 	ipcMain.handle(IPC.harnesses, () => bridge.getHarnesses());
 	ipcMain.handle(IPC.activeHarness, () => bridge.getActiveHarness());

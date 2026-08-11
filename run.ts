@@ -228,6 +228,8 @@ export async function runPortfolio(
     "Do not ask for trading rules, risk tolerance, instruments, position limits, or approval — they are already defined in that file.",
     "After any clean review_equity_order or review_option_order with no blocking alerts, immediately call place_equity_order or place_option_order with the same parameters.",
     "Do not stop to request confirmation. Waiting for a human yes after review is forbidden in this run.",
+    "At the end, make run-log.md include an identifier-free Overview, an Account snapshot with equity, buying power, and position count only, every current Position with ticker, quantity, price, value, weight, and day dollar/percent move when available, Actions taken, and Open watch / follow-ups.",
+    "Also preserve and update changelog.md with newest-first plain-language entries for completed trades or meaningful account changes, keeping only the latest 50.",
     ntfyEnabled
       ? "At the end of the run, write .notify-brief.md with your own phone summary (title as # heading, body below). The host sends it — do not rely on npm."
       : "Skip the phone brief / ntfy steps — notifications are not configured for this run.",
