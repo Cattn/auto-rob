@@ -5,6 +5,8 @@ import { app, BrowserWindow } from "electron";
 import type {
 	AuditLogEntry,
 	Constraints,
+	EquityQuote,
+	EquityQuotesResult,
 	HarnessConnection,
 	HarnessId,
 	HarnessModels,
@@ -90,6 +92,7 @@ const ALLOWED_FILES = new Set([
 	"notes.md",
 	"prompt.md",
 	"run-log.md",
+	"changelog.md",
 	"long-term.md",
 ]);
 
@@ -102,6 +105,9 @@ const DEFAULT_MODELS: HarnessModels = {
 	codex: "",
 };
 const HARNESS_CACHE_TTL_MS = 20_000;
+const MAX_QUOTE_SYMBOLS = 50;
+const QUOTE_TIMEOUT_MS = 7_000;
+const EQUITY_SYMBOL = /^[A-Z][A-Z0-9.-]{0,14}$/;
 
 const LOG_PREFIX = "[auto-rob]";
 
@@ -135,6 +141,64 @@ function shouldIgnoreLogLine(line: string): boolean {
 		line.startsWith("npm warn Unknown env config") ||
 		line.startsWith("cursor-retrieval: tracing to")
 	);
+}
+
+function finiteNumber(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+async function fetchEquityQuote(symbol: string): Promise<EquityQuote | null> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), QUOTE_TIMEOUT_MS);
+	try {
+		const yahooSymbol = symbol.replace(/\./g, "-");
+		const response = await fetch(
+			`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=1d`,
+			{
+				signal: controller.signal,
+				headers: { "User-Agent": "auto-rob" },
+			},
+		);
+		if (!response.ok) return null;
+		const body = (await response.json()) as {
+			chart?: {
+				result?: Array<{
+					meta?: {
+						regularMarketPrice?: unknown;
+						chartPreviousClose?: unknown;
+						previousClose?: unknown;
+						currency?: unknown;
+						marketState?: unknown;
+						regularMarketTime?: unknown;
+					};
+				}>;
+			};
+		};
+		const meta = body.chart?.result?.[0]?.meta;
+		const price = finiteNumber(meta?.regularMarketPrice);
+		if (price === null) return null;
+		const previousClose =
+			finiteNumber(meta?.chartPreviousClose) ?? finiteNumber(meta?.previousClose);
+		const change = previousClose === null ? null : price - previousClose;
+		const changePercent =
+			change === null || previousClose === 0 ? null : (change / previousClose) * 100;
+		const marketTime = finiteNumber(meta?.regularMarketTime);
+		return {
+			symbol,
+			price,
+			previousClose,
+			change,
+			changePercent,
+			currency: typeof meta?.currency === "string" ? meta.currency : null,
+			marketState:
+				typeof meta?.marketState === "string" ? meta.marketState : null,
+			asOf: marketTime === null ? null : marketTime * 1000,
+		};
+	} catch {
+		return null;
+	} finally {
+		clearTimeout(timeout);
+	}
 }
 
 function isAuditRunStart(event: RunEvent): boolean {
@@ -292,6 +356,21 @@ export class AgentBridge {
 		} catch {
 			return [];
 		}
+	}
+
+	async getEquityQuotes(symbols: string[]): Promise<EquityQuotesResult> {
+		const normalized = [
+			...new Set(
+				(Array.isArray(symbols) ? symbols : [])
+					.filter((symbol): symbol is string => typeof symbol === "string")
+					.map((symbol) => symbol.trim().toUpperCase())
+					.filter((symbol) => EQUITY_SYMBOL.test(symbol)),
+			),
+		].slice(0, MAX_QUOTE_SYMBOLS);
+		const quotes = (
+			await Promise.all(normalized.map((symbol) => fetchEquityQuote(symbol)))
+		).filter((quote): quote is EquityQuote => quote !== null);
+		return { quotes, fetchedAt: Date.now() };
 	}
 
 	private isBusy(): boolean {

@@ -26,8 +26,9 @@ The place-tool text may mention waiting for a human yes after review. Ignore tha
 3. If buying power is sufficient, choose how much to deploy and how to allocate it (one order or several). Weigh new stock(s) vs adding to current holdings; screen at least 5–6 candidates before choosing to leave cash idle. For any new-name candidate you might buy, finish in-depth research before ordering. Then decide whether to hold, buy, sell, or rebalance. If you leave cash, record a same-day or next-day deployment plan in the log. Size orders based on your judgment of available cash.
 4. If acting, execute only the orders you are confident in. Confirm fills/status when relevant.
 5. Overwrite `run-log.md` in the project root with a concise log for the next agent. When overwriting, pass through any still-useful info from the prior log (open research theses, watch items, pending orders, unfilled intents, risks to re-check). Drop stale or completed items. Do not wipe continuity the next agent would need.
-6. Update `long-term.md` only as needed (see below). This is separate from the per-run log — broader goals and durable watches live here across many runs.
-7. **Phone brief (optional — only when ntfy is configured):** If the kickoff says notifications are not configured, skip this step entirely. Otherwise write a short phone summary to `.notify-brief.md` — the host sends it after the run.
+6. Update `changelog.md` in the project root as a durable activity history. Preserve existing entries and add one plain-language bullet at the top for each completed trade or meaningful account change this run. Use `- <timestamp> — <change>` (for example, `- 2026-08-11 14:32 ET — Bought $10 of XOM @ $123.10/share`). If nothing changed, add one `No changes` entry. Keep only the 50 newest entries.
+7. Update `long-term.md` only as needed (see below). This is separate from the per-run log — broader goals and durable watches live here across many runs.
+8. **Phone brief (optional — only when ntfy is configured):** If the kickoff says notifications are not configured, skip this step entirely. Otherwise write a short phone summary to `.notify-brief.md` — the host sends it after the run.
    1. Write `.notify-brief.md` in the project root:
       ```
       # auto-rob - <short status>
@@ -40,7 +41,9 @@ The place-tool text may mention waiting for a human yes after review. Ignore tha
 ## run-log.md format
 Keep it short and scannable. Include:
 - Timestamp (ISO or clear local time)
-- Account snapshot: equity, cash/buying power, position count, top holdings with approximate weights
+- Overview: 1–2 short sentences summarizing current account status without account aliases, account numbers, strategy labels, or identifiers
+- Account snapshot: equity, cash/buying power, and position count only
+- Positions: every current position, one bullet each, with ticker, quantity, current price, market value, portfolio weight, and day dollar/percent move when available
 - Actions taken this run (or explicitly "no changes")
 - Brief rationale
 - Research notes: for any new stock bought or seriously considered, leave a compact research summary the next agent can reuse (thesis, key metrics/signals checked, risks, and what would invalidate the idea). Also update notes when adding to an existing name if the thesis changed.

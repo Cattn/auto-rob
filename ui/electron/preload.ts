@@ -14,6 +14,7 @@ const api: AutoRobApi = {
 	startRun: () => ipcRenderer.invoke(IPC.runStart),
 	stopRun: () => ipcRenderer.invoke(IPC.runStop),
 	getAuditLog: () => ipcRenderer.invoke(IPC.auditLogGet),
+	getEquityQuotes: (symbols) => ipcRenderer.invoke(IPC.equityQuotesGet, symbols),
 	readRepoFile: (name) => ipcRenderer.invoke(IPC.readFile, name),
 	getHarnesses: () => ipcRenderer.invoke(IPC.harnesses),
 	getActiveHarness: () => ipcRenderer.invoke(IPC.activeHarness),

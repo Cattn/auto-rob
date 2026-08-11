@@ -4,6 +4,7 @@
       "Mcp(robinhood-trading:*)",
       "Read(**)",
       "Write(run-log.md)",
+      "Write(changelog.md)",
       "Write(long-term.md)",
       "Write(.notify-brief.md)",
       "WebFetch(*)"

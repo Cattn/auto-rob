@@ -5,6 +5,7 @@ export const IPC = {
 	runStatus: "auto-rob:run:status",
 	runEvent: "auto-rob:run:event",
 	auditLogGet: "auto-rob:audit-log:get",
+	equityQuotesGet: "auto-rob:equity-quotes:get",
 	readFile: "auto-rob:fs:read",
 	harnesses: "auto-rob:harness:list",
 	activeHarness: "auto-rob:harness:active",
@@ -122,6 +123,22 @@ export type AuditLogEntry = {
 	line: string;
 };
 
+export type EquityQuote = {
+	symbol: string;
+	price: number;
+	previousClose: number | null;
+	change: number | null;
+	changePercent: number | null;
+	currency: string | null;
+	marketState: string | null;
+	asOf: number | null;
+};
+
+export type EquityQuotesResult = {
+	quotes: EquityQuote[];
+	fetchedAt: number;
+};
+
 export type SavedNoteMeta = {
 	id: string;
 	title: string;
@@ -200,6 +217,7 @@ export type AutoRobApi = {
 	startRun: () => Promise<RunStatus>;
 	stopRun: () => Promise<RunStatus>;
 	getAuditLog: () => Promise<AuditLogEntry[]>;
+	getEquityQuotes: (symbols: string[]) => Promise<EquityQuotesResult>;
 	readRepoFile: (name: string) => Promise<string | null>;
 	getHarnesses: () => Promise<HarnessConnection[]>;
 	getActiveHarness: () => Promise<HarnessId>;
