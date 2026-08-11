@@ -1,0 +1,10 @@
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  macos-alias: true
+  fs-xattr: true
+engineStrict: true
+nodeLinker: hoisted
+overrides:
+  yauzl: 3.3.1
