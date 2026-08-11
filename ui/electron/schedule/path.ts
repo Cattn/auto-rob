@@ -1,5 +1,4 @@
 import { app } from "electron";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export type RunCommand = {
@@ -11,10 +10,6 @@ export type RunCommand = {
 function quote(arg: string): string {
 	if (!/[ \t"]/.test(arg)) return arg;
 	return `"${arg.replace(/"/g, '\\"')}"`;
-}
-
-function quoteCmd(arg: string): string {
-	return `"${arg.replace(/"/g, '""')}"`;
 }
 
 export function resolveRunCommand(catchUp = false): RunCommand {
@@ -68,21 +63,4 @@ export function workingDirectoryForCommand(command: string): string {
 		return workingDirectoryForRun();
 	}
 	return path.dirname(command);
-}
-
-export async function ensureWindowsScheduleLauncher(
-	catchUp = false,
-): Promise<string> {
-	const cmd = resolveRunCommand(catchUp);
-	const dir = path.join(app.getPath("userData"), "schedule");
-	await mkdir(dir, { recursive: true });
-	const scriptPath = path.join(
-		dir,
-		catchUp ? "run-catch-up.cmd" : "run-once.cmd",
-	);
-	const cwd = workingDirectoryForRun();
-	const invoke = [cmd.command, ...cmd.args].map(quoteCmd).join(" ");
-	const body = ["@echo off", `cd /d ${quoteCmd(cwd)}`, invoke, ""].join("\r\n");
-	await writeFile(scriptPath, body, "utf8");
-	return scriptPath;
 }

@@ -4,6 +4,7 @@ export const IPC = {
 	runStop: "auto-rob:run:stop",
 	runStatus: "auto-rob:run:status",
 	runEvent: "auto-rob:run:event",
+	auditLogGet: "auto-rob:audit-log:get",
 	readFile: "auto-rob:fs:read",
 	harnesses: "auto-rob:harness:list",
 	activeHarness: "auto-rob:harness:active",
@@ -115,6 +116,12 @@ export type RunEvent =
 	| { type: "status"; status: RunStatus }
 	| { type: "log"; line: string };
 
+export type AuditLogEntry = {
+	at: number;
+	kind: "log" | "status";
+	line: string;
+};
+
 export type SavedNoteMeta = {
 	id: string;
 	title: string;
@@ -192,6 +199,7 @@ export type AutoRobApi = {
 	getRunStatus: () => Promise<RunStatus>;
 	startRun: () => Promise<RunStatus>;
 	stopRun: () => Promise<RunStatus>;
+	getAuditLog: () => Promise<AuditLogEntry[]>;
 	readRepoFile: (name: string) => Promise<string | null>;
 	getHarnesses: () => Promise<HarnessConnection[]>;
 	getActiveHarness: () => Promise<HarnessId>;

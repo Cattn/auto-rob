@@ -1,4 +1,5 @@
 import type {
+	AuditLogEntry,
 	AutoRobApi,
 	Constraints,
 	HarnessConnection,
@@ -16,6 +17,7 @@ import type {
 	OnboardingApplyResult,
 	OnboardingState,
 	PromptResetResult,
+	RunEvent,
 	RunStatus,
 	SavedNoteMeta,
 	SchedulePreset,
@@ -24,6 +26,7 @@ import type {
 } from "../../shared/ipc";
 
 export type {
+	AuditLogEntry,
 	AutoRobApi,
 	Constraints,
 	HarnessConnection,
@@ -41,6 +44,7 @@ export type {
 	OnboardingApplyResult,
 	OnboardingState,
 	PromptResetResult,
+	RunEvent,
 	RunStatus,
 	SavedNoteMeta,
 	SchedulePreset,
