@@ -78,23 +78,36 @@ export function sortLongTermItems(items: LongTermItem[]): LongTermItem[] {
 	});
 }
 
+function normalizeFieldKey(raw: string): string {
+	return raw.replace(/^\*+|\*+$/g, "").replace(/^`+|`+$/g, "").trim().toLowerCase();
+}
+
 function parseFieldMap(block: string): Record<string, string> {
 	const fields: Record<string, string> = {};
 	for (const line of block.split(/\r?\n/)) {
 		const trimmed = line.trim();
-		const match = trimmed.match(/^-?\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(.*)$/);
+		const match = trimmed.match(/^(?:[-*]\s+)?(?:\*\*|`)?([a-zA-Z_][a-zA-Z0-9_]*)(?:\*\*|`)?\s*:\s*(.*)$/);
 		if (!match) continue;
-		fields[match[1].toLowerCase()] = match[2].trim();
+		const key = normalizeFieldKey(match[1]);
+		if (!key) continue;
+		fields[key] = match[2].trim().replace(/^\*+|\*+$/g, "").trim();
 	}
 	return fields;
+}
+
+function parseItemHeading(idLine: string): { id: string; titleHint: string } | null {
+	const match = idLine.match(/^`?(lt_[a-zA-Z0-9_-]+)`?(?:\s*[:\-—–]\s*|\s+)?(.*)$/);
+	if (!match) return null;
+	return { id: match[1], titleHint: match[2].trim() };
 }
 
 export function parseLongTermMarkdown(content: string): LongTermItem[] {
 	const text = content.replace(/\r\n/g, "\n").trim();
 	if (!text) return [];
 
-	const parts = text.split(/^##\s+/m);
+	const parts = text.split(/^#{2,3}\s+/m);
 	const items: LongTermItem[] = [];
+	const seen = new Set<string>();
 
 	for (const part of parts) {
 		const trimmed = part.trim();
@@ -102,10 +115,12 @@ export function parseLongTermMarkdown(content: string): LongTermItem[] {
 		const nl = trimmed.indexOf("\n");
 		const idLine = (nl === -1 ? trimmed : trimmed.slice(0, nl)).trim();
 		const body = nl === -1 ? "" : trimmed.slice(nl + 1);
-		if (!/^lt_[a-zA-Z0-9]+$/.test(idLine)) continue;
+		const heading = parseItemHeading(idLine);
+		if (!heading) continue;
+		if (seen.has(heading.id)) continue;
 
 		const fields = parseFieldMap(body);
-		const title = fields.title?.trim() ?? "";
+		const title = fields.title?.trim() || heading.titleHint;
 		if (!title) continue;
 
 		const type = isLongTermType(fields.type) ? fields.type : "goal";
@@ -115,8 +130,9 @@ export function parseLongTermMarkdown(content: string): LongTermItem[] {
 		const checkRaw = fields.check_after?.trim() || fields.checkafter?.trim() || "";
 		const rationale = fields.rationale?.trim() || "";
 
+		seen.add(heading.id);
 		items.push({
-			id: idLine,
+			id: heading.id,
 			title,
 			type,
 			size,
