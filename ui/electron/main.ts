@@ -12,6 +12,14 @@ const catchUp = process.argv.includes("--schedule-catch-up");
 const runOnce = process.argv.includes("--run-once") || catchUp;
 const bridge = new AgentBridge();
 
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+	app.quit();
+}
+
+let ipcRegistered = false;
+let uiOpened = false;
+
 const createWindow = () => {
 	const mainWindow = new BrowserWindow({
 		width: 1100,
@@ -25,6 +33,7 @@ const createWindow = () => {
 	});
 
 	mainWindow.maximize();
+	uiOpened = true;
 
 	if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
 		mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -39,10 +48,13 @@ const createWindow = () => {
 };
 
 function registerIpc() {
+	if (ipcRegistered) return;
+	ipcRegistered = true;
 	ipcMain.handle(IPC.health, () => bridge.getHealth());
 	ipcMain.handle(IPC.runStatus, () => bridge.getStatus());
 	ipcMain.handle(IPC.runStart, () => bridge.startRun());
 	ipcMain.handle(IPC.runStop, () => bridge.stopRun());
+	ipcMain.handle(IPC.auditLogGet, () => bridge.getAuditLog());
 	ipcMain.handle(IPC.readFile, (_event, name: string) => bridge.readRepoFile(name));
 	ipcMain.handle(IPC.harnesses, () => bridge.getHarnesses());
 	ipcMain.handle(IPC.activeHarness, () => bridge.getActiveHarness());
@@ -102,54 +114,88 @@ function registerIpc() {
 	);
 }
 
-app.on("ready", () => {
-	if (started) return;
-	if (runOnce) {
-		void (async () => {
-			try {
-				const decision = await bridge.decideScheduledRun(catchUp);
-				if (decision.action === "skip") {
-					console.log(`auto-rob schedule skip: ${decision.reason}`);
-					app.exit(0);
-					return;
-				}
-				const status = await bridge.startRunAndWait();
-				if (status.state !== "failed" && decision.slotId) {
-					await bridge.recordScheduledRun(decision.slotId);
-				}
-				const code =
-					status.state === "failed" ? (status.exitCode ?? 1) : (status.exitCode ?? 0);
-				app.exit(code);
-			} catch (err) {
-				console.error(err);
-				app.exit(1);
-			}
-		})();
+function openOrFocusUi() {
+	registerIpc();
+	const win = BrowserWindow.getAllWindows()[0];
+	if (win) {
+		if (win.isMinimized()) win.restore();
+		win.focus();
 		return;
 	}
-
-	registerIpc();
 	createWindow();
-	void bridge.syncScheduleOnLaunch().catch((err) => {
-		console.error("schedule sync on launch failed", err);
+}
+
+async function executeScheduledRun(
+	catchUpFlag: boolean,
+	opts: { exitWhenDone: boolean },
+): Promise<void> {
+	const decision = await bridge.decideScheduledRun(catchUpFlag);
+	if (decision.action === "skip") {
+		console.log(`auto-rob schedule skip: ${decision.reason}`);
+		if (opts.exitWhenDone && !uiOpened) app.exit(0);
+		return;
+	}
+	const status = await bridge.startRunAndWait();
+	if (status.state !== "failed" && decision.slotId) {
+		await bridge.recordScheduledRun(decision.slotId);
+	}
+	const code =
+		status.state === "failed" ? (status.exitCode ?? 1) : (status.exitCode ?? 0);
+	if (opts.exitWhenDone && !uiOpened && BrowserWindow.getAllWindows().length === 0) {
+		app.exit(code);
+	}
+}
+
+if (gotLock) {
+	app.on("second-instance", (_event, argv) => {
+		const secondCatchUp = argv.includes("--schedule-catch-up");
+		const secondRunOnce = argv.includes("--run-once") || secondCatchUp;
+		if (secondRunOnce) {
+			void executeScheduledRun(secondCatchUp, { exitWhenDone: runOnce && !uiOpened }).catch(
+				(err) => {
+					console.error(err);
+					if (runOnce && !uiOpened) app.exit(1);
+				},
+			);
+			return;
+		}
+		openOrFocusUi();
 	});
-});
 
-app.on("window-all-closed", () => {
-	if (started || runOnce) return;
-	if (process.platform !== "darwin") {
-		app.quit();
-	}
-});
+	app.on("ready", () => {
+		if (started) return;
+		if (runOnce) {
+			void executeScheduledRun(catchUp, { exitWhenDone: true }).catch((err) => {
+				console.error(err);
+				app.exit(1);
+			});
+			return;
+		}
 
-app.on("activate", () => {
-	if (started || runOnce) return;
-	if (BrowserWindow.getAllWindows().length === 0) {
+		registerIpc();
 		createWindow();
-	}
-});
+		void bridge.syncScheduleOnLaunch().catch((err) => {
+			console.error("schedule sync on launch failed", err);
+		});
+	});
 
-app.on("before-quit", () => {
-	if (started) return;
-	void bridge.stopRun();
-});
+	app.on("window-all-closed", () => {
+		if (started) return;
+		if (runOnce && !uiOpened) return;
+		if (process.platform !== "darwin") {
+			app.quit();
+		}
+	});
+
+	app.on("activate", () => {
+		if (started) return;
+		if (BrowserWindow.getAllWindows().length === 0) {
+			openOrFocusUi();
+		}
+	});
+
+	app.on("before-quit", () => {
+		if (started) return;
+		void bridge.stopRun();
+	});
+}

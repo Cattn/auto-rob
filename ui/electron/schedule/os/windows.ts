@@ -4,7 +4,7 @@ import { writeFile, unlink, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { SchedulePreset } from "../presets";
 import { localTriggerTimes, type LocalParts } from "../slots";
-import { ensureWindowsScheduleLauncher } from "../path";
+import { resolveRunCommand, workingDirectoryForCommand } from "../path";
 
 const TASK_NAME = "auto-rob";
 const LEGACY_TASK_PREFIX = "auto-rob-slot-";
@@ -37,8 +37,9 @@ function quotePsSingle(s: string): string {
 	return `'${s.replace(/'/g, "''")}'`;
 }
 
-function quoteCmdPath(p: string): string {
-	return `"${p.replace(/"/g, '""')}"`;
+function quoteTaskArg(arg: string): string {
+	if (!/[ \t"]/.test(arg)) return arg;
+	return `"${arg.replace(/"/g, '""')}"`;
 }
 
 function slotKey(local: LocalParts): string {
@@ -55,10 +56,6 @@ function uniqueLocalTimes(locals: LocalParts[]): LocalParts[] {
 		out.push(local);
 	}
 	return out;
-}
-
-function cmdExePath(): string {
-	return path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "cmd.exe");
 }
 
 async function scheduleDir(): Promise<string> {
@@ -213,16 +210,12 @@ function buildRemoveScript(tasks: ListedTask[]): string {
 		.join("\r\n");
 }
 
-function buildInstallScript(
-	locals: LocalParts[],
-	launcherPath: string,
-	runMissed: boolean,
-): string {
-	const cmd = cmdExePath();
-	const workDir = path.dirname(launcherPath);
-	const arg = `/d /c ${quoteCmdPath(launcherPath)}`;
+function buildInstallScript(locals: LocalParts[], runMissed: boolean): string {
+	const run = resolveRunCommand(false);
+	const workDir = workingDirectoryForCommand(run.command);
+	const arg = run.args.map(quoteTaskArg).join(" ");
 	const lines: string[] = [
-		`$action = New-ScheduledTaskAction -Execute ${quotePsSingle(cmd)} -Argument ${quotePsSingle(arg)} -WorkingDirectory ${quotePsSingle(workDir)}`,
+		`$action = New-ScheduledTaskAction -Execute ${quotePsSingle(run.command)} -Argument ${quotePsSingle(arg)} -WorkingDirectory ${quotePsSingle(workDir)}`,
 		`$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 4)${runMissed ? " -StartWhenAvailable" : ""}`,
 		`$principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited`,
 		`$triggers = @()`,
@@ -253,9 +246,8 @@ export async function installWindowsSchedule(
 	runMissed: boolean,
 ): Promise<void> {
 	const existing = await listAutoRobTasks();
-	const launcherPath = await ensureWindowsScheduleLauncher(false);
 	const locals = uniqueLocalTimes(localTriggerTimes(preset));
-	const script = [buildRemoveScript(existing), buildInstallScript(locals, launcherPath, runMissed)]
+	const script = [buildRemoveScript(existing), buildInstallScript(locals, runMissed)]
 		.filter(Boolean)
 		.join("\r\n");
 	await runScheduleScript(script);

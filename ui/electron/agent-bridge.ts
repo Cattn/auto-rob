@@ -1,8 +1,9 @@
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, appendFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { app, BrowserWindow } from "electron";
 import type {
+	AuditLogEntry,
 	Constraints,
 	HarnessConnection,
 	HarnessId,
@@ -93,6 +94,8 @@ const ALLOWED_FILES = new Set([
 ]);
 
 const CONFIG_FILE = "auto-rob.config.json";
+const AUDIT_LOG_FILE = "audit-log.jsonl";
+const MAX_AUDIT_ENTRIES = 200;
 const DEFAULT_ACTIVE_HARNESS: HarnessId = "cursor";
 const DEFAULT_MODELS: HarnessModels = {
 	cursor: "grok-4.5[effort=high,fast=true]",
@@ -132,6 +135,21 @@ function shouldIgnoreLogLine(line: string): boolean {
 		line.startsWith("npm warn Unknown env config") ||
 		line.startsWith("cursor-retrieval: tracing to")
 	);
+}
+
+function isAuditRunStart(event: RunEvent): boolean {
+	return event.type === "log" && event.line.startsWith("Starting run in ");
+}
+
+function auditEntryFromEvent(event: RunEvent): AuditLogEntry | null {
+	if (event.type === "log") {
+		return { at: Date.now(), kind: "log", line: event.line };
+	}
+	return {
+		at: Date.now(),
+		kind: "status",
+		line: `${event.status.state}: ${event.status.message}`,
+	};
 }
 
 function pathExists(filePath: string): Promise<boolean> {
@@ -175,6 +193,8 @@ export class AgentBridge {
 	private runTask: Promise<void> | null = null;
 	private harnessesCache: { at: number; data: HarnessConnection[] } | null = null;
 	private harnessesInflight: Promise<HarnessConnection[]> | null = null;
+	private auditChain: Promise<void> = Promise.resolve();
+	private auditCount = 0;
 	private status: RunStatus = {
 		state: "idle",
 		message: "Ready",
@@ -217,8 +237,60 @@ export class AgentBridge {
 	}
 
 	private emit(event: RunEvent) {
+		this.persistRunEvent(event);
 		for (const win of BrowserWindow.getAllWindows()) {
 			win.webContents.send(IPC.runEvent, event);
+		}
+	}
+
+	private persistRunEvent(event: RunEvent) {
+		const entry = auditEntryFromEvent(event);
+		if (!entry) return;
+		const clear = isAuditRunStart(event);
+		this.auditChain = this.auditChain
+			.then(async () => {
+				const workspace = this.workspaceRoot ?? (await this.ensureRoot());
+				const file = path.join(workspace, AUDIT_LOG_FILE);
+				if (clear) {
+					this.auditCount = 0;
+					await writeFile(file, "", "utf8");
+				}
+				if (this.auditCount >= MAX_AUDIT_ENTRIES) return;
+				this.auditCount += 1;
+				await appendFile(file, `${JSON.stringify(entry)}\n`, "utf8");
+			})
+			.catch((err) => {
+				bridgeWarn("audit log persist failed", err);
+			});
+	}
+
+	async getAuditLog(): Promise<AuditLogEntry[]> {
+		const workspace = await this.ensureRoot();
+		try {
+			const raw = await readFile(path.join(workspace, AUDIT_LOG_FILE), "utf8");
+			const entries: AuditLogEntry[] = [];
+			for (const line of raw.split(/\r?\n/)) {
+				const trimmed = line.trim();
+				if (!trimmed) continue;
+				try {
+					const parsed = JSON.parse(trimmed) as Partial<AuditLogEntry>;
+					if (
+						typeof parsed.at !== "number" ||
+						(parsed.kind !== "log" && parsed.kind !== "status") ||
+						typeof parsed.line !== "string"
+					) {
+						continue;
+					}
+					entries.push({ at: parsed.at, kind: parsed.kind, line: parsed.line });
+				} catch {
+					// skip bad lines
+				}
+			}
+			return entries.length > MAX_AUDIT_ENTRIES
+				? entries.slice(-MAX_AUDIT_ENTRIES)
+				: entries;
+		} catch {
+			return [];
 		}
 	}
 
@@ -650,6 +722,7 @@ export class AgentBridge {
 	async startRunAndWait(): Promise<RunStatus> {
 		const status = await this.startRun();
 		if (this.runTask) await this.runTask;
+		await this.auditChain;
 		return this.getStatus() ?? status;
 	}
 
