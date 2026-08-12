@@ -16,6 +16,7 @@ export {
 export {
   getHarnessModel,
   getHarnessModels,
+  migrateModelId,
   readConfig,
   setHarnessModel,
   writeActiveHarness,

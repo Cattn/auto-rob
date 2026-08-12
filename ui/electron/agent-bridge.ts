@@ -34,6 +34,7 @@ import {
 	getHarnessModels,
 	isHarnessId,
 	listHarnessStatuses,
+	migrateModelId,
 	setActiveHarness,
 	setHarnessModel,
 } from "../../harness/index";
@@ -101,7 +102,7 @@ const AUDIT_LOG_FILE = "audit-log.jsonl";
 const MAX_AUDIT_ENTRIES = 200;
 const DEFAULT_ACTIVE_HARNESS: HarnessId = "cursor";
 const DEFAULT_MODELS: HarnessModels = {
-	cursor: "grok-4.5[effort=high,fast=true]",
+	cursor: "cursor-grok-4.5-high-fast",
 	codex: "",
 };
 const HARNESS_CACHE_TTL_MS = 20_000;
@@ -385,6 +386,7 @@ export class AgentBridge {
 		const workspace = await this.ensureRoot();
 		let activeHarness = DEFAULT_ACTIVE_HARNESS;
 		const models: HarnessModels = { ...DEFAULT_MODELS };
+		let dirty = false;
 		try {
 			const raw = await readFile(path.join(workspace, CONFIG_FILE), "utf8");
 			const parsed = JSON.parse(raw) as {
@@ -397,7 +399,9 @@ export class AgentBridge {
 			if (parsed.models && typeof parsed.models === "object") {
 				for (const id of Object.keys(DEFAULT_MODELS) as HarnessId[]) {
 					if (typeof parsed.models[id] === "string") {
-						models[id] = parsed.models[id]!.trim();
+						const next = migrateModelId(parsed.models[id]!);
+						models[id] = next;
+						if (next !== parsed.models[id]!.trim()) dirty = true;
 					}
 				}
 			}
@@ -408,7 +412,11 @@ export class AgentBridge {
 		if (envOverride && isHarnessId(envOverride)) {
 			activeHarness = envOverride;
 		}
-		return { activeHarness, models };
+		const config = { activeHarness, models };
+		if (dirty) {
+			await this.writeAutoRobConfig(config);
+		}
+		return config;
 	}
 
 	private async writeAutoRobConfig(next: AutoRobConfigFile): Promise<void> {

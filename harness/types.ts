@@ -43,7 +43,7 @@ export const HARNESS_LABELS: Record<HarnessId, string> = {
 };
 
 export const DEFAULT_MODELS: Record<HarnessId, string> = {
-  cursor: "grok-4.5[effort=high,fast=true]",
+  cursor: "cursor-grok-4.5-high-fast",
   codex: "",
 };
 

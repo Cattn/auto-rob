@@ -1,7 +1,7 @@
 {
   "activeHarness": "cursor",
   "models": {
-    "cursor": "grok-4.5[effort=high,fast=true]",
+    "cursor": "cursor-grok-4.5-high-fast",
     "codex": ""
   }
 }
