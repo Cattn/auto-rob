@@ -9,6 +9,8 @@ ui/.svelte-kit/
 !.cursor/cli.json
 !.cursor/permissions.json
 .current-run-prompt.md
+prompt.md
+onboarding.json
 run-log.md
 long-term.md
 .ntfy-setup/

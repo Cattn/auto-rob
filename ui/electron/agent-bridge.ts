@@ -228,18 +228,18 @@ export async function findRepoRoot(startDir: string): Promise<string> {
 	let dir = startDir;
 	for (;;) {
 		const packageJson = path.join(dir, "package.json");
-		const indexTs = path.join(dir, "index.ts");
-		const prompt = path.join(dir, "prompt.md");
+		const runTs = path.join(dir, "run.ts");
+		const promptDefault = path.join(dir, "prompt.default.md");
 		if (
 			(await pathExists(packageJson)) &&
-			(await pathExists(indexTs)) &&
-			(await pathExists(prompt))
+			(await pathExists(runTs)) &&
+			(await pathExists(promptDefault))
 		) {
 			return dir;
 		}
 		const parent = path.dirname(dir);
 		if (parent === dir) {
-			throw new Error("Could not find auto-rob repo root (index.ts + prompt.md)");
+			throw new Error("Could not find auto-rob repo root (run.ts + prompt.default.md)");
 		}
 		dir = parent;
 	}

@@ -80,4 +80,4 @@ Other commands from `ui/`:
 - `pnpm run package` - production build in `ui/out`
 - `pnpm run make` - platform installers
 
-From the repo root, `npm run ui` is the same as `pnpm --dir ui start` (pnpm must already be installed). Root `npm install` is only needed for the CLI scripts (`npm start`, `npm run harness:list`, and similar).
+From the repo root, `npm run ui` is the same as `pnpm --dir ui start` (pnpm must already be installed).

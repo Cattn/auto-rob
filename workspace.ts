@@ -1,7 +1,6 @@
 import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 export const APP_DATA_DIR_NAME = "auto-rob";
 export const WORKSPACE_SUBDIR = "workspace";
@@ -65,16 +64,6 @@ export function resolveOsUserDataDir(): string {
 
 export function resolveDefaultWorkspace(): string {
   return path.join(resolveOsUserDataDir(), WORKSPACE_SUBDIR);
-}
-
-export function resolveCliWorkspace(_importMetaUrl?: string): string {
-  const fromEnv = process.env.AUTO_ROB_WORKSPACE?.trim();
-  if (fromEnv) return path.resolve(fromEnv);
-  return resolveDefaultWorkspace();
-}
-
-export function resolveRepoRoot(importMetaUrl: string): string {
-  return path.dirname(fileURLToPath(importMetaUrl));
 }
 
 export async function ensureWorkspaceSeeded(
@@ -157,18 +146,4 @@ export async function loadDefaultsFromRepoRoot(
     cursorPermissionsJson,
     envExample,
   };
-}
-
-export async function prepareCliWorkspace(
-  importMetaUrl: string,
-  explicitRoot?: string,
-): Promise<string> {
-  const workspace = explicitRoot
-    ? path.resolve(explicitRoot)
-    : resolveCliWorkspace(importMetaUrl);
-  const repoRoot = resolveRepoRoot(importMetaUrl);
-  await migrateWorkspaceFromRepo(repoRoot, workspace);
-  const defaults = await loadDefaultsFromRepoRoot(repoRoot);
-  await ensureWorkspaceSeeded(workspace, defaults);
-  return workspace;
 }

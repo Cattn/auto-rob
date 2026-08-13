@@ -1,33 +1,8 @@
 {
   "name": "auto-rob",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "description": "Desktop app that runs a Robinhood portfolio agent on a schedule",
   "scripts": {
-    "start": "npx --yes tsx index.ts",
-    "notify": "npx --yes tsx notify-send.ts",
-    "notify:test": "npx --yes tsx test-notify.ts",
-    "agent:check": "npx --yes tsx agent-check.ts",
-    "codex:check": "npx --yes tsx codex-mcp-check.ts",
-    "codex:connect": "npx --yes tsx codex-mcp-check.ts --connect",
-    "harness:list": "npx --yes tsx harness-cli.ts list",
-    "cursor:connect": "npx --yes tsx harness-cli.ts connect cursor",
-    "onboarding": "npx --yes tsx onboarding-cli.ts",
-    "ui": "pnpm --dir ui start",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
-  "devDependencies": {
-    "@types/cross-spawn": "^6.0.6",
-    "@types/node": "^26.1.1",
-    "@types/which": "^3.0.4",
-    "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "cross-spawn": "^7.0.6",
-    "which": "^6.0.1"
+    "ui": "pnpm --dir ui start"
   }
 }

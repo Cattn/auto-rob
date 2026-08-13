@@ -40,15 +40,6 @@ export function normalizeTickers(input: unknown): string[] {
 	return out;
 }
 
-export function parseTickerList(raw: string): string[] {
-	return normalizeTickers(
-		raw
-			.split(/[,\s]+/)
-			.map((s) => s.trim())
-			.filter(Boolean),
-	);
-}
-
 export function normalizeConstraints(
 	input: Partial<Constraints> | null | undefined,
 ): Constraints {
