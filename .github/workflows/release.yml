@@ -20,6 +20,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Ensure tag is on main
+        working-directory: .
+        shell: bash
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Release tag $(git rev-parse --short HEAD) is not on origin/main"
+            exit 1
+          fi
 
       - name: Install Linux packaging tools
         if: runner.os == 'Linux'
