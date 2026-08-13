@@ -1,5 +1,3 @@
-packages:
-  - "."
 allowBuilds:
   electron: true
   electron-winstaller: true
