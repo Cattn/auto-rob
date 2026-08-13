@@ -1,6 +1,4 @@
 @import 'tailwindcss';
-@plugin '@tailwindcss/forms';
-@plugin '@tailwindcss/typography';
 
 @theme {
 	--color-primary: rgb(var(--m3-scheme-primary));

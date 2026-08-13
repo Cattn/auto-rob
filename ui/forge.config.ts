@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -14,6 +15,59 @@ import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
 const require = createRequire(import.meta.url);
+
+const KEEP_PAK = new Set(["en-US.pak", "en-GB.pak"]);
+const KEEP_LPROJ = new Set([
+  "en.lproj",
+  "en_US.lproj",
+  "en_GB.lproj",
+  "Base.lproj",
+  "English.lproj",
+]);
+
+async function trimElectronLocales(buildPath: string, platform: string) {
+  if (platform === "win32" || platform === "linux") {
+    const localesDir = path.resolve(buildPath, "..", "..", "locales");
+    let names: string[];
+    try {
+      names = await readdir(localesDir);
+    } catch {
+      return;
+    }
+    await Promise.all(
+      names
+        .filter((name) => name.endsWith(".pak") && !KEEP_PAK.has(name))
+        .map((name) => rm(path.join(localesDir, name), { force: true })),
+    );
+    return;
+  }
+
+  if (platform !== "darwin" && platform !== "mas") return;
+
+  const frameworkResources = path.resolve(
+    buildPath,
+    "..",
+    "..",
+    "Frameworks",
+    "Electron Framework.framework",
+    "Versions",
+    "A",
+    "Resources",
+  );
+  let names: string[];
+  try {
+    names = await readdir(frameworkResources);
+  } catch {
+    return;
+  }
+  await Promise.all(
+    names
+      .filter((name) => name.endsWith(".lproj") && !KEEP_LPROJ.has(name))
+      .map((name) =>
+        rm(path.join(frameworkResources, name), { recursive: true, force: true }),
+      ),
+  );
+}
 
 function ensureSquirrelVendor() {
   if (process.platform !== "win32") return;
@@ -47,6 +101,9 @@ const config: ForgeConfig = {
   hooks: {
     preMake: async () => {
       ensureSquirrelVendor();
+    },
+    packageAfterCopy: async (_config, buildPath, _electronVersion, platform) => {
+      await trimElectronLocales(buildPath, platform);
     },
   },
   makers: [
