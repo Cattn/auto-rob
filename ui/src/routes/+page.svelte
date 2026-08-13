@@ -55,19 +55,149 @@
 		return [];
 	}
 
+	const SKIP_SYMBOLS = new Set([
+		'REST',
+		'TICKER',
+		'SYMBOL',
+		'SYM',
+		'QTY',
+		'QUANTITY',
+		'SHARES',
+		'PRICE',
+		'VALUE',
+		'WEIGHT',
+		'DAY'
+	]);
+
 	function numberValue(value: string | undefined): number | null {
 		if (!value) return null;
-		const parsed = Number(value.replace(/,/g, ''));
+		const parsed = Number(value.replace(/[−–—]/g, '-').replace(/,/g, ''));
 		return Number.isFinite(parsed) ? parsed : null;
 	}
 
+	function cellNumber(value: string | undefined): number | null {
+		if (!value) return null;
+		return numberValue(value.replace(/[−–—]/g, '-').replace(/[$%]/g, '').trim());
+	}
+
+	function tableCells(line: string): string[] | null {
+		const trimmed = line.trim();
+		if (!trimmed.startsWith('|')) return null;
+		const cells = trimmed
+			.replace(/^\|/, '')
+			.replace(/\|$/, '')
+			.split('|')
+			.map((cell) => cell.trim());
+		if (cells.length < 2) return null;
+		if (cells.every((cell) => /^:?-+:?$/.test(cell))) return null;
+		return cells;
+	}
+
+	function headerKey(cell: string): string | null {
+		const header = cell.toLowerCase().replace(/[^a-z0-9%$]/g, '');
+		if (header === 'ticker' || header === 'symbol' || header === 'sym') return 'symbol';
+		if (header === 'qty' || header === 'quantity' || header === 'shares' || header === 'sh')
+			return 'quantity';
+		if (header === 'price' || header === 'last' || header === 'px') return 'price';
+		if (header === 'value' || header === 'marketvalue' || header === 'mktvalue') return 'value';
+		if (header === 'weight' || header === 'wt') return 'weight';
+		if (header === 'day$' || header === 'daychange' || header === 'dayusd') return 'dayChange';
+		if (header === 'day%' || header === 'daypercent' || header === 'daypct') return 'dayPercent';
+		return null;
+	}
+
+	function holdingFromCells(cells: string[], keys: Array<string | null>): Holding | null {
+		const get = (key: string) => {
+			const idx = keys.indexOf(key);
+			return idx >= 0 ? cells[idx] : undefined;
+		};
+		const symbolRaw = get('symbol') ?? cells[0] ?? '';
+		const symbolMatch = symbolRaw.replace(/^\$/, '').match(/^([A-Z][A-Z0-9.-]{0,14})$/i);
+		if (!symbolMatch) return null;
+		const symbol = symbolMatch[1].toUpperCase();
+		if (SKIP_SYMBOLS.has(symbol)) return null;
+		return {
+			symbol,
+			quantity: cellNumber(get('quantity')),
+			loggedPrice: cellNumber(get('price')),
+			loggedValue: cellNumber(get('value')),
+			weight: cellNumber(get('weight')),
+			loggedDayChange: cellNumber(get('dayChange')),
+			loggedDayPercent: cellNumber(get('dayPercent'))
+		};
+	}
+
+	function parseHoldingsTable(lines: string[]): Holding[] {
+		const rows = lines
+			.map(tableCells)
+			.filter((cells): cells is string[] => cells !== null);
+		if (rows.length === 0) return [];
+		let keys: Array<string | null> = [
+			'symbol',
+			'quantity',
+			'price',
+			'value',
+			'weight',
+			'dayChange',
+			'dayPercent'
+		];
+		let dataStart = 0;
+		const headerKeys = rows[0].map(headerKey);
+		if (headerKeys.includes('symbol')) {
+			keys = headerKeys;
+			dataStart = 1;
+		}
+		const holdings: Holding[] = [];
+		for (const cells of rows.slice(dataStart)) {
+			const holding = holdingFromCells(cells, keys);
+			if (holding) holdings.push(holding);
+		}
+		return holdings;
+	}
+
+	function parseDateFromText(text: string): number | null {
+		const iso = text.match(
+			/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?)(Z|[+-]\d{2}:?\d{2})?/
+		);
+		if (iso) {
+			let stamp = iso[1];
+			if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(stamp)) stamp += ':00';
+			const parsed = Date.parse(`${stamp}${iso[2] ?? ''}`);
+			if (Number.isFinite(parsed)) return parsed;
+		}
+		const spaced = text.match(/(\d{4}-\d{2}-\d{2})[ T](\d{1,2}:\d{2}(?::\d{2})?)/);
+		if (spaced) {
+			const time = spaced[2].length <= 5 ? `${spaced[2]}:00` : spaced[2];
+			const parsed = Date.parse(`${spaced[1]}T${time}`);
+			if (Number.isFinite(parsed)) return parsed;
+		}
+		return null;
+	}
+
+	function parseRunTimestamp(markdown: string): number | null {
+		const firstHeading = markdown.match(/^\s*#\s+(.+)$/m);
+		const labeled = markdown.match(
+			/^\s*(?:[-*+]|\d+\.)?\s*(?:timestamp|as of|updated|last\s+update(?:d)?)\s*[:=—–-]\s*(.+)$/im
+		);
+		for (const text of [firstHeading?.[1], labeled?.[1]]) {
+			if (!text) continue;
+			const parsed = parseDateFromText(text);
+			if (parsed !== null) return parsed;
+		}
+		return null;
+	}
+
 	function parseHolding(line: string): Holding | null {
-		const cleaned = cleanLine(line);
+		const cleaned = cleanLine(line).replace(/^\|\s*/, '').replace(/\s*\|$/, '');
 		const symbolMatch = cleaned.match(/^\$?([A-Z][A-Z0-9.-]{0,14})\b/i);
 		if (!symbolMatch) return null;
 		const symbol = symbolMatch[1].toUpperCase();
-		if (symbol === 'REST') return null;
-		const details = cleaned.slice(symbolMatch[0].length).trim().replace(/^[—–|,:-]+\s*/, '');
+		if (SKIP_SYMBOLS.has(symbol)) return null;
+		const details = cleaned
+			.slice(symbolMatch[0].length)
+			.trim()
+			.replace(/^[—–|,:-]+\s*/, '')
+			.replace(/[−]/g, '-');
 		const quantity =
 			numberValue(details.match(/\b(?:qty|quantity)\s*[:=]?\s*([\d,.]+)/i)?.[1]) ??
 			numberValue(details.match(/\b([\d,.]+)\s*(?:shares?|sh)\b/i)?.[1]);
@@ -139,6 +269,15 @@
 		});
 	}
 
+	function formatTimestamp(timestamp: number): string {
+		return new Date(timestamp).toLocaleString([], {
+			month: 'short',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit'
+		});
+	}
+
 	function isRawAccountMetadata(text: string): boolean {
 		const signals = [
 			/\baccount\s*:/i,
@@ -187,9 +326,14 @@
 					.filter(Boolean)
 			: [];
 	});
-	const holdings = $derived(
-		positionLines.map(parseHolding).filter((holding): holding is Holding => holding !== null)
-	);
+	const holdings = $derived.by(() => {
+		const fromTable = parseHoldingsTable(positionLines);
+		if (fromTable.length > 0) return fromTable;
+		return positionLines
+			.map(parseHolding)
+			.filter((holding): holding is Holding => holding !== null);
+	});
+	const runUpdatedAt = $derived(parseRunTimestamp(runLog));
 	const positionCount = $derived(parsedPositionCount ?? (holdings.length > 0 ? holdings.length : null));
 	const overview = $derived.by(() => {
 		const narrative = [
@@ -239,12 +383,16 @@
 		})
 	);
 	const quoteFreshness = $derived.by(() => {
-		if (!quoteResult) return symbols.length > 0 ? 'Loading' : 'No symbols';
-		if (quoteResult.quotes.length === 0) return 'Unavailable';
-		const latest = Math.max(
-			...quoteResult.quotes.map((quote) => quote.asOf ?? quoteResult.fetchedAt)
-		);
-		return `${marketLabel(quoteResult.quotes[0]?.marketState ?? null)} · ${timeLabel(latest)}`;
+		if (quoteResult && quoteResult.quotes.length > 0) {
+			const latest = Math.max(
+				...quoteResult.quotes.map((quote) => quote.asOf ?? quoteResult.fetchedAt)
+			);
+			return `${marketLabel(quoteResult.quotes[0]?.marketState ?? null)} · ${timeLabel(latest)}`;
+		}
+		if (!quoteResult && symbols.length > 0) return 'Loading';
+		if (runUpdatedAt !== null) return `Last run · ${formatTimestamp(runUpdatedAt)}`;
+		if (quoteResult) return 'Unavailable';
+		return symbols.length > 0 ? 'Loading' : 'No symbols';
 	});
 	const focus = $derived(
 		section(runLog, ['open watch / follow-ups', 'open watch', 'follow-ups', 'carry-forward'])
