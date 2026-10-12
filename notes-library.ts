@@ -1,7 +1,7 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { resolveOsUserDataDir } from "./workspace";
+import { resolveOsUserDataDir } from "./workspace.js";
 
 export const NOTES_FILE = "notes.md";
 export const NOTES_LIBRARY_SUBDIR = "notes";

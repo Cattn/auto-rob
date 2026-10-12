@@ -384,8 +384,9 @@
 	);
 	const quoteFreshness = $derived.by(() => {
 		if (quoteResult && quoteResult.quotes.length > 0) {
+			const fetchedAt = quoteResult.fetchedAt;
 			const latest = Math.max(
-				...quoteResult.quotes.map((quote) => quote.asOf ?? quoteResult.fetchedAt)
+				...quoteResult.quotes.map((quote) => quote.asOf ?? fetchedAt)
 			);
 			return `${marketLabel(quoteResult.quotes[0]?.marketState ?? null)} · ${timeLabel(latest)}`;
 		}

@@ -112,10 +112,13 @@ export function createCodexHarness(workspace: string): AgentHarness {
       const argv = [
         "exec",
         "--json",
+        "--skip-git-repo-check",
         "--sandbox",
         "danger-full-access",
         "-c",
         "approval_policy=never",
+        "-c",
+        "mcp_servers.robinhood-trading.required=true",
       ];
       if (model) {
         argv.push("-m", model);
