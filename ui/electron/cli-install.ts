@@ -69,8 +69,9 @@ export async function installCli(executable = process.execPath, appImage = proce
   await writeFile(launcher, unixLauncher(target, platform !== "linux" || Boolean(appImage)), { mode: 0o755 });
   await chmod(launcher, 0o755);
   const exportPath = 'export PATH="$HOME/.local/bin:$PATH"';
-  for (const name of [".profile", ".bash_profile", ".zprofile"]) {
+  for (const name of [".profile", ".bash_profile", ".bash_login", ".zprofile"]) {
     const profile = path.join(home, name);
+    if (name.startsWith(".bash_") && !(await access(profile).then(() => true, () => false))) continue;
     const content = await readFile(profile, "utf8").catch(() => "");
     if (!content.split(/\r?\n/).includes(exportPath)) {
       await writeFile(profile, `${content}${content.endsWith("\n") || !content ? "" : "\n"}${exportPath}\n`, "utf8");

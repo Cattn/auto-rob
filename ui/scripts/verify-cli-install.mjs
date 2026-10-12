@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, writeFile, symlink, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -28,6 +28,7 @@ try {
   const home = path.join(root, 'home');
   await mkdir(home);
   await writeFile(path.join(home, '.profile'), 'export EXISTING=value');
+  await writeFile(path.join(home, '.bash_profile'), 'export EXISTING_BASH=value\n');
   await installCli('/Applications/Test App.app/Contents/MacOS/electron-svelte', undefined, home, 'darwin');
   await installCli('/Applications/Test App.app/Contents/MacOS/electron-svelte', undefined, home, 'darwin');
   for (const name of ['.profile', '.bash_profile', '.zprofile']) {
@@ -35,6 +36,13 @@ try {
     assert.equal(profile.split('\n').filter(line => line === 'export PATH="$HOME/.local/bin:$PATH"').length, 1);
   }
   assert.match(await readFile(path.join(home, '.profile'), 'utf8'), /^export EXISTING=value\n/);
+  assert.match(await readFile(path.join(home, '.bash_profile'), 'utf8'), /^export EXISTING_BASH=value\n/);
+  const loginHome = path.join(root, 'login-home');
+  await mkdir(loginHome);
+  await writeFile(path.join(loginHome, '.bash_login'), 'export EXISTING_LOGIN=value\n');
+  await installCli('/tmp/extracted/electron-svelte', undefined, loginHome, 'linux');
+  assert.equal(await access(path.join(loginHome, '.bash_profile')).then(() => true, () => false), false);
+  assert.match(await readFile(path.join(loginHome, '.bash_login'), 'utf8'), /^export EXISTING_LOGIN=value\nexport PATH=/);
   await installCli('/tmp/extracted/electron-svelte', '/home/test/Auto Rob.AppImage', home, 'linux');
   assert.match(await readFile(path.join(home, '.local/bin/auto-rob'), 'utf8'), /exec '\/home\/test\/Auto Rob.AppImage' --cli/);
   const fake = path.join(root, 'args.cjs');

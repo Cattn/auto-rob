@@ -99,7 +99,7 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo dpkg -i out/make/deb/x64/*.deb
+          sudo apt-get install -y ./out/make/deb/x64/*.deb
           test -x /usr/bin/auto-rob
           auto-rob --version
 
