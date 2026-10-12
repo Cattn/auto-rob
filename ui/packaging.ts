@@ -57,9 +57,12 @@ export async function makeMacInstaller(results: ForgeMakeResult[]): Promise<Forg
     "",
   ].join("\n"), { mode: 0o755 });
   await chmod(postinstall, 0o755);
+  const components = path.resolve(".vite", "pkg-components.plist");
+  const bundleName = appName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  await writeFile(components, `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><array><dict><key>RootRelativeBundlePath</key><string>${bundleName}</string><key>BundleIsRelocatable</key><false/><key>BundleOverwriteAction</key><string>upgrade</string></dict></array></plist>\n`, "utf8");
   const installer = path.resolve("out", "make", `auto-rob-${result.packageJSON.version}-${result.arch}.pkg`);
   await execute("pkgbuild", [
-    "--component", path.join(output, appName), "--install-location", "/Applications",
+    "--root", output, "--component-plist", components, "--install-location", "/Applications",
     "--identifier", "com.auto-rob.desktop", "--version", result.packageJSON.version,
     "--scripts", scripts, installer,
   ]);
