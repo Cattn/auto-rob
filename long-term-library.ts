@@ -101,6 +101,204 @@ function parseItemHeading(idLine: string): { id: string; titleHint: string } | n
 	return { id: match[1], titleHint: match[2].trim() };
 }
 
+function stableLegacyId(added: string, title: string, index: number): string {
+	const basis = `${index}\n${added}\n${title}`;
+	let hash = 2166136261;
+	for (let i = 0; i < basis.length; i++) {
+		hash ^= basis.charCodeAt(i);
+		hash = Math.imul(hash, 16777619);
+	}
+	const head = (hash >>> 0).toString(16).padStart(8, "0");
+	const tail = (index & 0xffff).toString(16).padStart(4, "0");
+	return `lt_${head}${tail}`;
+}
+
+function normalizeLooseKey(raw: string): string {
+	return raw
+		.replace(/^\*+|\*+$/g, "")
+		.replace(/^`+|`+$/g, "")
+		.replace(/[_-]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.toLowerCase();
+}
+
+function parseLooseFields(block: string): { key: string; value: string }[] {
+	const fields: { key: string; value: string }[] = [];
+	for (const line of block.split("\n")) {
+		const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+		if (bullet) {
+			const body = bullet[1].trim();
+			const match = body.match(/^(.{1,40}?):\s*(.*)$/);
+			if (match) {
+				fields.push({
+					key: normalizeLooseKey(match[1]),
+					value: match[2].trim(),
+				});
+			} else {
+				fields.push({ key: "", value: body });
+			}
+			continue;
+		}
+		const continuation = line.trim();
+		if (fields.length > 0 && continuation) {
+			const last = fields[fields.length - 1];
+			last.value = last.value ? `${last.value} ${continuation}` : continuation;
+		}
+	}
+	return fields;
+}
+
+function isLegacyItemStartLine(line: string): boolean {
+	const top = line.match(/^[-*]\s+(.+)$/);
+	if (!top) return false;
+	const keyMatch = top[1].match(/^([^:]{1,40}?):\s*/);
+	if (!keyMatch) return false;
+	const key = normalizeLooseKey(keyMatch[1]);
+	return (
+		key === "date added" ||
+		key === "goal" ||
+		key === "watch" ||
+		key === "todo" ||
+		key === "last reviewed"
+	);
+}
+
+function takeStructuredFields(body: string): string {
+	const lines = body.split("\n");
+	const kept: string[] = [];
+	for (const line of lines) {
+		if (isLegacyItemStartLine(line)) break;
+		kept.push(line);
+	}
+	return kept.join("\n");
+}
+
+function legacyBlocks(content: string): string[] {
+	const blocks: string[][] = [];
+	let current: string[] | null = null;
+	let pendingBlank = false;
+	let inStructured = false;
+
+	const flush = () => {
+		if (current && current.some((line) => line.trim())) blocks.push(current);
+		current = null;
+		pendingBlank = false;
+	};
+
+	for (const line of content.split("\n")) {
+		if (/^#{1,6}\s+/.test(line)) {
+			flush();
+			inStructured = /^#{2,3}\s+`?lt_[a-zA-Z0-9_-]+/.test(line.trim());
+			continue;
+		}
+		if (inStructured && isLegacyItemStartLine(line)) inStructured = false;
+		if (inStructured) continue;
+		if (!line.trim()) {
+			if (current) pendingBlank = true;
+			continue;
+		}
+		if (/^[-*]\s+\S/.test(line)) {
+			if (!current || pendingBlank) {
+				flush();
+				current = [];
+			}
+			pendingBlank = false;
+			current.push(line);
+			continue;
+		}
+		if (current && /^\s+\S/.test(line)) {
+			pendingBlank = false;
+			current.push(line);
+			continue;
+		}
+		flush();
+	}
+	flush();
+	return blocks.map((lines) => lines.join("\n"));
+}
+
+function itemFromLegacyBlock(block: string, index: number): LongTermItem | null {
+	const fields = parseLooseFields(block);
+	if (fields.length === 0) return null;
+
+	let explicitTitle = "";
+	let typedTitle = "";
+	let type: LongTermType = "goal";
+	let size: LongTermSize = "medium";
+	let pinned = false;
+	let source: LongTermSource = "agent";
+	let added = "";
+	let checkAfter: string | null = null;
+	let rationale = "";
+	let lastReviewed = "";
+
+	for (const field of fields) {
+		const key = field.key;
+		const value = field.value.trim();
+		if (!value && key !== "pinned") continue;
+		if (key === "date added" || key === "added" || key === "date") {
+			added = value;
+		} else if (
+			key === "last reviewed" ||
+			key === "reviewed" ||
+			key === "last updated" ||
+			key === "updated"
+		) {
+			lastReviewed = value;
+		} else if (key === "goal" || key === "watch" || key === "todo") {
+			type = key;
+			typedTitle = value;
+		} else if (key === "type") {
+			const candidate = value.toLowerCase().match(/[a-z]+/)?.[0] ?? "";
+			if (isLongTermType(candidate)) type = candidate;
+		} else if (key === "title") {
+			explicitTitle = value;
+		} else if (key === "size") {
+			const word = value.toLowerCase().match(/[a-z]+/)?.[0] ?? "";
+			if (isLongTermSize(word)) size = word;
+		} else if (key === "rationale" || key === "why" || key === "reason") {
+			rationale = value;
+		} else if (
+			key === "check after" ||
+			key === "checkafter" ||
+			key === "revisit" ||
+			key === "revisit after"
+		) {
+			checkAfter = value || null;
+		} else if (key === "pinned") {
+			pinned = parseBool(value);
+		} else if (key === "source") {
+			const candidate = value.toLowerCase().match(/[a-z]+/)?.[0] ?? "";
+			if (isLongTermSource(candidate)) source = candidate;
+		} else if (!key && !explicitTitle && !typedTitle) {
+			typedTitle = value;
+		}
+	}
+
+	const title = (explicitTitle || typedTitle).trim();
+	if (!title) return null;
+
+	const addedDate = added.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? todayDate();
+	if (lastReviewed) {
+		rationale = rationale
+			? `Last reviewed: ${lastReviewed} ${rationale}`
+			: `Last reviewed: ${lastReviewed}`;
+	}
+
+	return {
+		id: stableLegacyId(addedDate, title, index),
+		title,
+		type,
+		size,
+		pinned,
+		source,
+		added: addedDate,
+		checkAfter,
+		rationale,
+	};
+}
+
 export function parseLongTermMarkdown(content: string): LongTermItem[] {
 	const text = content.replace(/\r\n/g, "\n").trim();
 	if (!text) return [];
@@ -114,7 +312,7 @@ export function parseLongTermMarkdown(content: string): LongTermItem[] {
 		if (!trimmed || trimmed.startsWith("# ")) continue;
 		const nl = trimmed.indexOf("\n");
 		const idLine = (nl === -1 ? trimmed : trimmed.slice(0, nl)).trim();
-		const body = nl === -1 ? "" : trimmed.slice(nl + 1);
+		const body = takeStructuredFields(nl === -1 ? "" : trimmed.slice(nl + 1));
 		const heading = parseItemHeading(idLine);
 		if (!heading) continue;
 		if (seen.has(heading.id)) continue;
@@ -142,6 +340,13 @@ export function parseLongTermMarkdown(content: string): LongTermItem[] {
 			checkAfter: checkRaw || null,
 			rationale,
 		});
+	}
+
+	for (const [index, block] of legacyBlocks(text).entries()) {
+		const item = itemFromLegacyBlock(block, index);
+		if (!item || seen.has(item.id)) continue;
+		seen.add(item.id);
+		items.push(item);
 	}
 
 	return sortLongTermItems(items);
