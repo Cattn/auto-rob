@@ -7,13 +7,13 @@
 	import type {
 		HarnessConnection,
 		HarnessId,
-		HarnessModels,
 		HealthInfo,
 		NtfySettings,
 		SchedulePreset,
 		ScheduleStatus
 	} from '$lib/backend';
 	import HarnessConnectPanel from '$lib/components/HarnessConnectPanel.svelte';
+	import ModelPicker from '$lib/components/ModelPicker.svelte';
 	import {
 		SCHEDULE_PRESET_OPTIONS,
 		tradeStyleLabel
@@ -22,15 +22,12 @@
 	let health = $state<HealthInfo | null>(null);
 	let harnesses = $state<HarnessConnection[]>([]);
 	let activeId = $state<HarnessId | null>(null);
-	let models = $state<HarnessModels>({ cursor: '', codex: '' });
-	let draftModels = $state<HarnessModels>({ cursor: '', codex: '' });
 	let ntfy = $state<NtfySettings | null>(null);
 	let draftNtfy = $state({ url: '', topic: '', token: '' });
 	let clearNtfyToken = $state(false);
 	let schedule = $state<ScheduleStatus | null>(null);
 	let loadError = $state<string | null>(null);
 	let settingActive = $state(false);
-	let savingModelId = $state<HarnessId | null>(null);
 	let savingNtfy = $state(false);
 	let ntfyMessage = $state<string | null>(null);
 	let scheduleBusy = $state(false);
@@ -46,26 +43,10 @@
 
 	const agentPath = $derived(activeHarness?.binaryPath ?? health?.agentPath ?? null);
 
-	function modelsFromHarnesses(list: HarnessConnection[]): HarnessModels {
-		const next: HarnessModels = { cursor: '', codex: '' };
-		for (const h of list) {
-			next[h.id] = h.model ?? '';
-		}
-		return next;
-	}
-
 	function applyHealth(info: HealthInfo) {
 		health = info;
 		harnesses = info.harnesses;
 		activeId = info.activeHarness;
-		const nextModels = modelsFromHarnesses(info.harnesses);
-		models = nextModels;
-		draftModels = { ...nextModels };
-	}
-
-	function modelHint(id: HarnessId): string {
-		if (id === 'cursor') return 'Leave blank for Cursor default';
-		return 'Leave blank for Codex default';
 	}
 
 	function applyNtfy(settings: NtfySettings) {
@@ -168,23 +149,6 @@
 			loadError = err instanceof Error ? err.message : String(err);
 		} finally {
 			settingActive = false;
-		}
-	}
-
-	async function saveModel(id: HarnessId) {
-		const api = getBackend();
-		if (!api || savingModelId) return;
-		const next = draftModels[id] ?? '';
-		if (next === (models[id] ?? '')) return;
-		savingModelId = id;
-		try {
-			models = await api.setHarnessModel(id, next);
-			draftModels = { ...models };
-			harnesses = harnesses.map((h) => (h.id === id ? { ...h, model: models[id] } : h));
-		} catch (err) {
-			loadError = err instanceof Error ? err.message : String(err);
-		} finally {
-			savingModelId = null;
 		}
 	}
 
@@ -343,7 +307,7 @@
 							Models
 						</h2>
 						<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
-							Per-harness model id used on the next run.
+							Search models and choose supported options for the next run.
 						</p>
 					</div>
 
@@ -356,35 +320,7 @@
 							class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
 						>
 							{#each harnesses as h (h.id)}
-								<div class="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-									<label class="min-w-0" for={`model-${h.id}`}>
-										<span class="text-on-surface block text-sm font-medium">{h.label}</span>
-										<span class="text-on-surface-variant mt-0.5 block text-sm">
-											{modelHint(h.id)}
-										</span>
-									</label>
-									<div class="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:min-w-[16rem]">
-										<input
-											id={`model-${h.id}`}
-											class="bg-surface text-on-surface placeholder:text-on-surface-variant ring-outline/50 focus:ring-primary min-w-0 flex-1 rounded-lg px-3 py-2 text-sm outline-none ring-1 focus:ring-2"
-											type="text"
-											placeholder={modelHint(h.id)}
-											bind:value={draftModels[h.id]}
-											disabled={savingModelId !== null}
-											onkeydown={(e) => {
-												if (e.key === 'Enter') void saveModel(h.id);
-											}}
-										/>
-										<Button
-											variant="tonal"
-											disabled={savingModelId !== null ||
-												(draftModels[h.id] ?? '') === (models[h.id] ?? '')}
-											click={() => saveModel(h.id)}
-										>
-											{savingModelId === h.id ? 'Saving…' : 'Save'}
-										</Button>
-									</div>
-								</div>
+								<ModelPicker id={h.id} label={h.label} />
 							{/each}
 						</div>
 					{/if}

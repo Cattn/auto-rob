@@ -51,6 +51,7 @@ export function runCommand(
   command: string,
   argv: string[],
   cwd?: string,
+  timeoutMs?: number,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, argv, {
@@ -63,6 +64,10 @@ export function runCommand(
       reject(new Error(`Failed to spawn: ${command}`));
       return;
     }
+    const timer = timeoutMs ? setTimeout(() => {
+      killProcessTree(child);
+      reject(new Error(`Command timed out: ${command}`));
+    }, timeoutMs) : undefined;
     let stdout = "";
     let stderr = "";
     child.stdout?.setEncoding("utf8");
@@ -73,8 +78,12 @@ export function runCommand(
     child.stderr?.on("data", (chunk: string) => {
       stderr += chunk;
     });
-    child.on("error", reject);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
     child.on("close", (exitCode) => {
+      clearTimeout(timer);
       resolve({ code: exitCode ?? 1, stdout, stderr });
     });
   });

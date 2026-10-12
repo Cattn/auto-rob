@@ -10,6 +10,7 @@ import {
   SENT_MARKER,
 } from "./notify.js";
 import { getActiveHarness, getActiveHarnessId, isHarnessReady } from "./harness/index.js";
+import type { HarnessSelection } from "./harness/types.js";
 import {
   formatConstraintsSection,
   hasConstraints,
@@ -27,6 +28,7 @@ const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
 export type RunPortfolioOptions = {
   signal?: AbortSignal;
   onSpawn?: (child: ChildProcess) => void;
+  selection?: HarnessSelection;
 };
 
 async function notifyRunBrief(
@@ -256,6 +258,7 @@ export async function runPortfolio(
     promptPath,
     signal: opts.signal,
     onSpawn: opts.onSpawn,
+    selection: opts.selection,
   });
 
   await notifyRunBrief(workspace, code);

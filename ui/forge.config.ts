@@ -13,6 +13,7 @@ import { MakerZIP } from "@electron-forge/maker-zip"
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { addPackagedCli, makeMacInstaller } from "./packaging";
 
 const require = createRequire(import.meta.url);
 
@@ -104,7 +105,9 @@ const config: ForgeConfig = {
     },
     packageAfterCopy: async (_config, buildPath, _electronVersion, platform) => {
       await trimElectronLocales(buildPath, platform);
+      await addPackagedCli(buildPath, platform);
     },
+    postMake: async (_config, results) => makeMacInstaller(results),
   },
   makers: [
     new MakerSquirrel({
@@ -118,9 +121,12 @@ const config: ForgeConfig = {
     new MakerRpm({
       options: {
         license: "ISC",
+        name: "auto-rob",
+        bin: "auto-rob",
+        execArguments: ["--gui"],
       },
     }),
-    new MakerDeb({}),
+    new MakerDeb({ options: { name: "auto-rob", bin: "auto-rob", execArguments: ["--gui"] } }),
     new MakerAppImage({
       options: {
         categories: ["Finance"],
