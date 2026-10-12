@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, chmod, writeFile, readdir } from "node:fs/promises";
+import { copyFile, mkdir, chmod, writeFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { ForgeMakeResult } from "@electron-forge/shared-types";
@@ -22,7 +22,9 @@ export function packagedUnixLauncher(platform: string): string {
     "  shift",
     `  exec "$directory/${target}" "$@"`,
     "fi",
-    `exec "$directory/${target}" --cli "$@"`,
+    platform === "linux"
+      ? 'exec "$directory/cli/node" "$directory/cli/cli.mjs" "$@"'
+      : `exec "$directory/${target}" --cli "$@"`,
     "",
   ].join("\n");
 }
@@ -37,6 +39,31 @@ export async function addPackagedCli(buildPath: string, platform: string): Promi
     : path.resolve(buildPath, "../../auto-rob");
   await writeFile(launcher, packagedUnixLauncher(platform), { mode: 0o755 });
   await chmod(launcher, 0o755);
+  if (platform === "linux") {
+    if (process.platform !== "linux") throw new Error("The Linux CLI requires a native Linux build.");
+    const cli = path.resolve(buildPath, "../../cli");
+    await mkdir(cli, { recursive: true });
+    await copyFile(process.execPath, path.join(cli, "node"));
+    await chmod(path.join(cli, "node"), 0o755);
+    await copyFile(path.resolve("headless/cli.js"), path.join(cli, "cli.mjs"));
+    await copyFile(path.resolve(path.dirname(process.execPath), "../LICENSE"), path.join(cli, "LICENSE"));
+    await writeFile(path.resolve(buildPath, "../../auto-rob-app"), [
+      "#!/bin/sh", "set -eu",
+      'launcher=$0',
+      'while [ -L "$launcher" ]; do',
+      '  directory=$(CDPATH= cd -- "$(dirname -- "$launcher")" && pwd)',
+      '  target=$(readlink "$launcher")',
+      '  case "$target" in /*) launcher=$target ;; *) launcher=$directory/$target ;; esac',
+      "done",
+      'directory=$(CDPATH= cd -- "$(dirname -- "$launcher")" && pwd)',
+      'if [ "${1-}" = "--cli" ]; then',
+      "  shift",
+      '  exec "$directory/auto-rob" "$@"',
+      "fi",
+      'exec "$directory/electron-svelte" "$@"',
+      "",
+    ].join("\n"), { mode: 0o755 });
+  }
 }
 
 export async function makeMacInstaller(results: ForgeMakeResult[]): Promise<ForgeMakeResult[]> {

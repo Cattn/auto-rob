@@ -130,6 +130,7 @@ const config: ForgeConfig = {
     new MakerAppImage({
       options: {
         categories: ["Finance"],
+        bin: "auto-rob-app",
       },
     }),
     new MakerZIP({}),

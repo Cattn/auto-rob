@@ -29,7 +29,6 @@ if (started) {
 	});
 } else if (cliMode) {
 	app.disableHardwareAcceleration();
-	if (process.platform === "linux") app.commandLine.appendSwitch("ozone-platform", "headless");
 	const exit = async (code: number) => {
 		await Promise.all([process.stdout, process.stderr].map((stream) =>
 			new Promise<void>((resolve) => stream.write("", () => resolve())),

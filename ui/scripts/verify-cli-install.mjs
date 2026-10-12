@@ -47,6 +47,10 @@ try {
     await mkdir(resourceDir, { recursive: true });
     const executable = path.join(binDir, 'electron-svelte');
     await writeFile(executable, `#!/bin/sh\nexec ${quote(process.execPath.replaceAll('\\', '/'))} ${quote(fake.replaceAll('\\', '/'))} "$@"\n`, { mode: 0o755 });
+    if (platform === 'linux') {
+      await mkdir(path.join(directory, 'cli'));
+      await writeFile(path.join(directory, 'cli/node'), await readFile(executable), { mode: 0o755 });
+    }
     const launcher = path.join(resourceDir, 'auto-rob');
     const source = packagedUnixLauncher(platform);
     await writeFile(launcher, source, { mode: 0o755 });
@@ -54,14 +58,14 @@ try {
     await shell(interpreter, ['-n'], source);
     const quotedArgument = process.platform === 'win32' ? 'quoted value' : "a'b";
     let output = await shell(interpreter, [launcher.replaceAll('\\', '/'), 'model with spaces', quotedArgument]);
-    assert.deepEqual(JSON.parse(output), ['--cli', 'model with spaces', quotedArgument]);
+    assert.deepEqual(JSON.parse(output), [platform === 'linux' ? `${directory.replaceAll('\\', '/')}/cli/cli.mjs` : '--cli', 'model with spaces', quotedArgument]);
     output = await shell(interpreter, [launcher.replaceAll('\\', '/'), '--gui', 'argument']);
     assert.deepEqual(JSON.parse(output), ['argument']);
     if (process.platform !== 'win32') {
       const link = path.join(root, `linked-${platform}`);
       await symlink(launcher, link);
       output = await shell(interpreter, [link, '--help']);
-      assert.deepEqual(JSON.parse(output), ['--cli', '--help']);
+      assert.deepEqual(JSON.parse(output), [platform === 'linux' ? `${directory}/cli/cli.mjs` : '--cli', '--help']);
     }
   }
   assert.equal(windowsLauncher('C:\\Apps\\auto-rob\\app-0.2.0\\electron-svelte.exe', 'C:\\Apps\\auto-rob\\bin'), '@echo off\r\n"%~dp0..\\app-0.2.0\\electron-svelte.exe" --cli %*\r\nexit /b %errorlevel%\r\n');

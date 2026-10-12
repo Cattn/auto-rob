@@ -17,8 +17,8 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "start": "electron-forge start",
     "build:headless": "vite build --config vite.headless.config.ts",
-    "package": "vite build && electron-forge package",
-    "make": "vite build && electron-forge make",
+    "package": "vite build && vite build --config vite.headless.config.ts && electron-forge package",
+    "make": "vite build && vite build --config vite.headless.config.ts && electron-forge make",
     "publish": "electron-forge publish"
   },
   "devDependencies": {

@@ -45,7 +45,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y fakeroot dpkg rpm squashfs-tools xvfb
+          sudo apt-get install -y fakeroot dpkg rpm squashfs-tools
         working-directory: .
 
       - name: Setup pnpm
@@ -69,12 +69,6 @@ jobs:
 
       - name: Build installers
         run: pnpm run make
-
-      - name: Configure Linux sandbox for unpacked CLI tests
-        if: runner.os == 'Linux'
-        run: |
-          sudo chown root:root out/electron-svelte-linux-x64/chrome-sandbox
-          sudo chmod 4755 out/electron-svelte-linux-x64/chrome-sandbox
 
       - name: Verify command installation
         run: node --experimental-strip-types scripts/verify-cli-install.mjs

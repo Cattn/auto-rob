@@ -21,8 +21,8 @@ export function windowsLauncher(executable: string, binDir: string): string {
   return `@echo off\r\n"${target}" --cli %*\r\nexit /b %errorlevel%\r\n`;
 }
 
-export function unixLauncher(executable: string): string {
-  return `#!/bin/sh\nexec ${shellQuote(executable)} --cli "$@"\n`;
+export function unixLauncher(executable: string, cliFlag = true): string {
+  return `#!/bin/sh\nexec ${shellQuote(executable)} ${cliFlag ? '--cli ' : ''}"$@"\n`;
 }
 
 export function windowsPathScript(binDir: string, remove: boolean, registryPath = "Environment"): string {
@@ -65,7 +65,8 @@ export async function installCli(executable = process.execPath, appImage = proce
   const binDir = path.join(home, ".local", "bin");
   await mkdir(binDir, { recursive: true });
   const launcher = path.join(binDir, "auto-rob");
-  await writeFile(launcher, unixLauncher(appImage || executable), { mode: 0o755 });
+  const target = platform === "linux" && !appImage ? packagedLauncher : (appImage || executable);
+  await writeFile(launcher, unixLauncher(target, platform !== "linux" || Boolean(appImage)), { mode: 0o755 });
   await chmod(launcher, 0o755);
   const exportPath = 'export PATH="$HOME/.local/bin:$PATH"';
   for (const name of [".profile", ".bash_profile", ".zprofile"]) {
