@@ -10,6 +10,8 @@ import type {
 	HarnessConnection,
 	HarnessId,
 	HarnessModels,
+	HarnessSelection,
+	ModelCatalog,
 	HealthInfo,
 	LongTermSize,
 	LongTermState,
@@ -32,12 +34,15 @@ import {
 	getActiveHarnessId,
 	getHarness,
 	getHarnessModels,
+	getHarnessSelection,
+	listModels,
 	isHarnessId,
 	isHarnessReady,
 	listHarnessStatuses,
 	migrateModelId,
 	setActiveHarness,
 	setHarnessModel,
+	setHarnessSelection,
 } from "../../harness/index";
 import { killProcessTree } from "../../harness/util";
 import {
@@ -552,6 +557,26 @@ export class AgentBridge {
 			};
 		}
 		return models;
+	}
+
+	async getModelCatalog(id: HarnessId): Promise<ModelCatalog> {
+		if (!isHarnessId(id)) throw new Error(`Invalid harness id: ${id}`);
+		try {
+			return { models: await listModels(id, await this.ensureRoot()), error: null };
+		} catch (error) {
+			return { models: [], error: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	async getHarnessSelection(id: HarnessId): Promise<HarnessSelection> {
+		if (!isHarnessId(id)) throw new Error(`Invalid harness id: ${id}`);
+		return getHarnessSelection(await this.ensureRoot(), id);
+	}
+
+	async setHarnessSelection(id: HarnessId, selection: HarnessSelection): Promise<HarnessSelection> {
+		const saved = await setHarnessSelection(await this.ensureRoot(), id, selection);
+		this.invalidateHarnessCache();
+		return saved;
 	}
 
 	async getNtfySettings(): Promise<NtfySettings> {

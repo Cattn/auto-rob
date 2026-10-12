@@ -72,6 +72,9 @@ function registerIpc() {
 	);
 	ipcMain.handle(IPC.promptReset, () => bridge.resetPrompt());
 	ipcMain.handle(IPC.harnessModels, () => bridge.getHarnessModels());
+	ipcMain.handle(IPC.modelCatalog, (_event, id) => bridge.getModelCatalog(id));
+	ipcMain.handle(IPC.harnessSelection, (_event, id) => bridge.getHarnessSelection(id));
+	ipcMain.handle(IPC.setHarnessSelection, (_event, id, selection) => bridge.setHarnessSelection(id, selection));
 	ipcMain.handle(IPC.setHarnessModel, (_event, id, model) =>
 		bridge.setHarnessModel(id, model),
 	);

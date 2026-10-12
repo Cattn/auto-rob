@@ -1,6 +1,7 @@
 import spawn from "cross-spawn";
 import { resolveCodexCommand } from "../../resolve-codex.js";
-import { getHarnessModel } from "../config.js";
+import { getHarnessSelection } from "../config.js";
+import { validateSelection } from "../models.js";
 import {
   HARNESS_LABELS,
   type AgentHarness,
@@ -103,8 +104,12 @@ export function createCodexHarness(workspace: string): AgentHarness {
     },
 
     async run(input: HarnessRunInput): Promise<number> {
+      if (input.signal?.aborted) return 130;
       const codex = await resolveCodexCommand();
-      const model = await getHarnessModel(workspace, "codex");
+      const selection = input.selection ?? await getHarnessSelection(workspace, "codex");
+      await validateSelection("codex", selection, workspace);
+      if (input.signal?.aborted) return 130;
+      const { model, reasoningEffort, contextWindow } = selection;
       console.log(dim(`harness: codex`));
       console.log(dim(`codex: ${codex}`));
       console.log(dim(`model: ${model || "(default)"}`));
@@ -122,6 +127,13 @@ export function createCodexHarness(workspace: string): AgentHarness {
       ];
       if (model) {
         argv.push("-m", model);
+      }
+      if (reasoningEffort) {
+        argv.push("-c", `model_reasoning_effort=${JSON.stringify(reasoningEffort)}`);
+      }
+      if (contextWindow !== null) {
+        argv.push("-c", `model_context_window=${contextWindow}`);
+        argv.push("-c", `model_auto_compact_token_limit=${Math.floor(contextWindow * 0.9)}`);
       }
       argv.push(input.kickoff);
 

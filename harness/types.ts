@@ -2,6 +2,29 @@ import type { ChildProcess } from "node:child_process";
 
 export type HarnessId = "cursor" | "codex";
 
+export type ModelSettings = {
+  reasoningEffort: string;
+  contextWindow: number | null;
+};
+
+export type HarnessSelection = ModelSettings & { model: string };
+
+export type HarnessModel = {
+  id: string;
+  label: string;
+  description: string;
+  isDefault: boolean;
+  reasoningEfforts: { value: string; description: string }[];
+  defaultReasoningEffort: string;
+  contextWindow: number | null;
+  maxContextWindow: number | null;
+};
+
+export type ModelCatalog = {
+  models: HarnessModel[];
+  error: string | null;
+};
+
 export type HarnessConnection = {
   id: HarnessId;
   binaryPath: string | null;
@@ -20,6 +43,7 @@ export type HarnessRunInput = {
   promptPath: string;
   signal?: AbortSignal;
   onSpawn?: (child: ChildProcess) => void;
+  selection?: HarnessSelection;
 };
 
 export type ConnectOptions = {

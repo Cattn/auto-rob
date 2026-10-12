@@ -5,11 +5,15 @@ import {
   HARNESS_IDS,
   isHarnessId,
   type HarnessId,
+  type HarnessSelection,
+  type ModelSettings,
 } from "./types.js";
+import { validateSelection } from "./models.js";
 
 export type AutoRobConfig = {
   activeHarness: HarnessId;
   models: Record<HarnessId, string>;
+  modelSettings: Record<HarnessId, ModelSettings>;
 };
 
 const CONFIG_FILE = "auto-rob.config.json";
@@ -85,6 +89,10 @@ export async function readConfig(workspace: string): Promise<AutoRobConfig> {
   let activeHarness = DEFAULT_HARNESS;
   let models = defaultModels();
   let rawModels: Partial<Record<HarnessId, string>> | undefined;
+  const modelSettings: Record<HarnessId, ModelSettings> = {
+    cursor: { reasoningEffort: "", contextWindow: null },
+    codex: { reasoningEffort: "", contextWindow: null },
+  };
 
   try {
     const file = await readRawConfig(workspace);
@@ -94,6 +102,18 @@ export async function readConfig(workspace: string): Promise<AutoRobConfig> {
     if (file.models && typeof file.models === "object") {
       rawModels = file.models as Partial<Record<HarnessId, string>>;
       models = normalizeModels(rawModels);
+    }
+    if (file.modelSettings && typeof file.modelSettings === "object") {
+      const settings = file.modelSettings as Partial<Record<HarnessId, Partial<ModelSettings>>>;
+      for (const id of HARNESS_IDS) {
+        const value = settings[id];
+        if (!value || typeof value !== "object") continue;
+        modelSettings[id] = {
+          reasoningEffort: typeof value.reasoningEffort === "string" ? value.reasoningEffort.trim() : "",
+          contextWindow: typeof value.contextWindow === "number" && Number.isSafeInteger(value.contextWindow) && value.contextWindow > 0
+            ? value.contextWindow : null,
+        };
+      }
     }
   } catch {
     // missing or invalid — defaults
@@ -105,10 +125,10 @@ export async function readConfig(workspace: string): Promise<AutoRobConfig> {
   }
 
   if (needsModelMigration(rawModels)) {
-    await writeConfig(workspace, { activeHarness, models });
+    await writeConfig(workspace, { activeHarness, models, modelSettings });
   }
 
-  return { activeHarness, models };
+  return { activeHarness, models, modelSettings };
 }
 
 export async function writeConfig(
@@ -118,6 +138,7 @@ export async function writeConfig(
   const raw = await readRawConfig(workspace);
   raw.activeHarness = next.activeHarness;
   raw.models = next.models;
+  raw.modelSettings = next.modelSettings;
   await writeFile(
     configPath(workspace),
     `${JSON.stringify(raw, null, 2)}\n`,
@@ -158,6 +179,25 @@ export async function setHarnessModel(
   }
   const current = await readConfig(workspace);
   const models = { ...current.models, [id]: migrateModelId(model) };
+  if (models[id] !== current.models[id]) {
+    current.modelSettings[id] = { reasoningEffort: "", contextWindow: null };
+  }
   await writeConfig(workspace, { ...current, models });
   return models;
+}
+
+export async function getHarnessSelection(workspace: string, id: HarnessId): Promise<HarnessSelection> {
+  const config = await readConfig(workspace);
+  return { model: config.models[id], ...config.modelSettings[id] };
+}
+
+export async function setHarnessSelection(workspace: string, id: HarnessId, selection: HarnessSelection): Promise<HarnessSelection> {
+  if (!isHarnessId(id)) throw new Error(`Invalid harness id: ${id}`);
+  await validateSelection(id, selection, workspace);
+  const next = { ...selection, model: migrateModelId(selection.model) };
+  const config = await readConfig(workspace);
+  config.models[id] = next.model;
+  config.modelSettings[id] = { reasoningEffort: next.reasoningEffort, contextWindow: next.contextWindow };
+  await writeConfig(workspace, config);
+  return next;
 }

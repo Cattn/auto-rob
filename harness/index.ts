@@ -4,6 +4,9 @@ export type {
   HarnessConnection,
   HarnessId,
   HarnessRunInput,
+  HarnessSelection,
+  HarnessModel,
+  ModelCatalog,
 } from "./types.js";
 export {
   DEFAULT_MODELS,
@@ -17,11 +20,14 @@ export {
 export {
   getHarnessModel,
   getHarnessModels,
+  getHarnessSelection,
   migrateModelId,
   readConfig,
   setHarnessModel,
+  setHarnessSelection,
   writeActiveHarness,
 } from "./config.js";
+export { listModels, validateSelection } from "./models.js";
 export {
   getActiveHarness,
   getActiveHarnessId,

@@ -1,6 +1,7 @@
 import spawn from "cross-spawn";
 import { resolveAgentCommand } from "../../resolve-agent.js";
-import { getHarnessModel } from "../config.js";
+import { getHarnessModel, getHarnessSelection } from "../config.js";
+import { validateSelection } from "../models.js";
 import {
   DEFAULT_MODELS,
   HARNESS_LABELS,
@@ -178,10 +179,12 @@ export function createCursorHarness(workspace: string): AgentHarness {
     },
 
     async run(input: HarnessRunInput): Promise<number> {
+      if (input.signal?.aborted) return 130;
       const agent = await resolveAgentCommand();
-      const model =
-        (await getHarnessModel(workspace, "cursor")) ||
-        DEFAULT_MODELS.cursor;
+      const selection = input.selection ?? await getHarnessSelection(workspace, "cursor");
+      await validateSelection("cursor", selection, workspace);
+      if (input.signal?.aborted) return 130;
+      const model = selection.model || DEFAULT_MODELS.cursor;
       console.log(dim(`harness: cursor`));
       console.log(dim(`agent: ${agent}`));
       console.log(dim(`model: ${model}`));

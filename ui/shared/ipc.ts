@@ -13,6 +13,9 @@ export const IPC = {
 	connectHarness: "auto-rob:harness:connect",
 	harnessModels: "auto-rob:harness:models",
 	setHarnessModel: "auto-rob:harness:set-model",
+	modelCatalog: "auto-rob:harness:model-catalog",
+	harnessSelection: "auto-rob:harness:selection",
+	setHarnessSelection: "auto-rob:harness:set-selection",
 	ntfyGet: "auto-rob:ntfy:get",
 	ntfySet: "auto-rob:ntfy:set",
 	onboardingGet: "auto-rob:onboarding:get",
@@ -76,6 +79,8 @@ export type RunState = "idle" | "running" | "failed";
 export type HarnessId = "cursor" | "codex";
 
 export type HarnessModels = Record<HarnessId, string>;
+export type { HarnessSelection, HarnessModel, ModelCatalog } from "../../harness/types";
+import type { HarnessSelection, ModelCatalog } from "../../harness/types";
 
 export type HarnessConnection = {
 	id: HarnessId;
@@ -226,6 +231,9 @@ export type AutoRobApi = {
 	connectHarness: (id: HarnessId) => Promise<HarnessConnection>;
 	getHarnessModels: () => Promise<HarnessModels>;
 	setHarnessModel: (id: HarnessId, model: string) => Promise<HarnessModels>;
+	getModelCatalog: (id: HarnessId) => Promise<ModelCatalog>;
+	getHarnessSelection: (id: HarnessId) => Promise<HarnessSelection>;
+	setHarnessSelection: (id: HarnessId, selection: HarnessSelection) => Promise<HarnessSelection>;
 	getNtfySettings: () => Promise<NtfySettings>;
 	setNtfySettings: (settings: {
 		url: string;

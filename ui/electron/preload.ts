@@ -29,6 +29,9 @@ const api: AutoRobApi = {
 	getHarnessModels: () => ipcRenderer.invoke(IPC.harnessModels),
 	setHarnessModel: (id: HarnessId, model: string) =>
 		ipcRenderer.invoke(IPC.setHarnessModel, id, model),
+	getModelCatalog: (id) => ipcRenderer.invoke(IPC.modelCatalog, id),
+	getHarnessSelection: (id) => ipcRenderer.invoke(IPC.harnessSelection, id),
+	setHarnessSelection: (id, selection) => ipcRenderer.invoke(IPC.setHarnessSelection, id, selection),
 	getNtfySettings: () => ipcRenderer.invoke(IPC.ntfyGet),
 	setNtfySettings: (settings) => ipcRenderer.invoke(IPC.ntfySet, settings),
 	getNotes: () => ipcRenderer.invoke(IPC.notesGet),
