@@ -9,12 +9,6 @@ import {
 } from "../types.js";
 import { dim, runCommand } from "../util.js";
 
-function hasRobinhood(listOutput: string): boolean {
-  return listOutput
-    .split(/\r?\n/)
-    .some((line) => line.toLowerCase().includes(MCP_NAME));
-}
-
 export async function codexVersion(
   codex: string,
   workspace: string,
@@ -31,13 +25,33 @@ export async function codexVersion(
 export async function listCodexMcp(
   codex: string,
   workspace: string,
-): Promise<{ code: number; text: string; configured: boolean }> {
-  const listed = await runCommand(codex, ["mcp", "list"], workspace);
+): Promise<{ code: number; text: string; configured: boolean; authenticated: boolean }> {
+  const listed = await runCommand(codex, ["mcp", "list", "--json"], workspace);
   const text = `${listed.stdout}\n${listed.stderr}`.trim();
+  let configured = false;
+  let authenticated = false;
+  if (listed.code === 0) {
+    try {
+      const servers = JSON.parse(listed.stdout) as Array<{
+        name: string;
+        enabled: boolean;
+        auth_status: string;
+        transport: { type: string; url?: string };
+      }>;
+      const server = servers.find((entry) => entry.name === MCP_NAME);
+      configured = Boolean(server?.enabled &&
+        server.transport.type === "streamable_http" && server.transport.url === MCP_URL);
+      const auth = server?.auth_status?.replaceAll("_", "").toLowerCase();
+      authenticated = configured && (auth === "oauth" || auth === "bearertoken");
+    } catch {
+      // Unrecognized output must not advertise a ready trading connection.
+    }
+  }
   return {
     code: listed.code,
     text,
-    configured: listed.code === 0 && hasRobinhood(text),
+    configured,
+    authenticated,
   };
 }
 
@@ -114,9 +128,9 @@ export async function codexStatusForWorkspace(
       binaryPath,
       binaryOk: true,
       mcpConfigured: listed.configured,
-      mcpAuthenticated: listed.configured,
+      mcpAuthenticated: listed.authenticated,
       model,
-      error: null,
+      error: listed.authenticated ? null : "Connect Robinhood with codex mcp login robinhood-trading before running auto-rob.",
     };
   } catch (err) {
     return {

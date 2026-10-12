@@ -42,10 +42,10 @@
 	let loadError = $state<string | null>(null);
 	let statusMsg = $state<string | null>(null);
 	let statusOk = $state(true);
-	let state = $state<OnboardingState | null>(null);
+	let onboardingState = $state<OnboardingState | null>(null);
 
 	const editMode = $derived(
-		(browser && page.url.searchParams.has('edit')) || Boolean(state?.completedAt)
+		(browser && page.url.searchParams.has('edit')) || Boolean(onboardingState?.completedAt)
 	);
 
 	const suggestedPreset = $derived(presetForTradeStyle(tradeStyle));
@@ -69,7 +69,7 @@
 	}
 
 	function applyState(s: OnboardingState) {
-		state = s;
+		onboardingState = s;
 		tradeStyle = s.answers.tradeStyle;
 		intent = s.answers.intent;
 		minPerTradeUsd = s.answers.minPerTradeUsd != null ? String(s.answers.minPerTradeUsd) : '';
@@ -497,7 +497,7 @@
 					</p>
 				{/if}
 
-				{#if state?.completedAt || state?.appliedAt}
+				{#if onboardingState?.completedAt || onboardingState?.appliedAt}
 					<section aria-label="State">
 						<div class="mb-2">
 							<h2
@@ -509,23 +509,23 @@
 						<div
 							class="bg-surface-container-high ring-outline/50 divide-outline/30 divide-y rounded-xl ring-1"
 						>
-							{#if state.completedAt}
+							{#if onboardingState.completedAt}
 								<div class="flex items-center justify-between gap-4 px-3 py-2.5">
 									<p class="text-on-surface text-xs font-medium">Completed</p>
 									<span
 										class="text-on-surface-variant shrink-0 text-xs"
 									>
-										{new Date(state.completedAt).toLocaleString()}
+										{new Date(onboardingState.completedAt).toLocaleString()}
 									</span>
 								</div>
 							{/if}
-							{#if state.appliedAt}
+							{#if onboardingState.appliedAt}
 								<div class="flex items-center justify-between gap-4 px-3 py-2.5">
 									<p class="text-on-surface text-xs font-medium">Applied</p>
 									<span
 										class="text-on-surface-variant shrink-0 text-xs"
 									>
-										{state.applyMode ?? 'direct'} · {new Date(state.appliedAt).toLocaleString()}
+										{onboardingState.applyMode ?? 'direct'} · {new Date(onboardingState.appliedAt).toLocaleString()}
 									</span>
 								</div>
 							{/if}

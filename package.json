@@ -1,8 +1,12 @@
 {
   "name": "auto-rob",
   "private": true,
+  "type": "module",
   "description": "Desktop app that runs a Robinhood portfolio agent on a schedule",
   "scripts": {
+    "start": "node ui/headless/cli.js",
+    "agent:check": "node ui/headless/cli.js --check",
+    "build:headless": "pnpm --dir ui run build:headless",
     "ui": "pnpm --dir ui start"
   }
 }

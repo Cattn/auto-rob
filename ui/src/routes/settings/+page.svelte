@@ -424,7 +424,7 @@
 								<Button
 									variant={schedule.enabled ? 'tonal' : 'filled'}
 									disabled={scheduleBusy || (!schedule.enabled && !schedule.canEnable)}
-									click={() => setScheduleEnabled(!schedule.enabled)}
+									click={() => setScheduleEnabled(!schedule?.enabled)}
 								>
 									{scheduleBusy
 										? 'Working…'
@@ -468,14 +468,14 @@
 								{#if schedule.cadenceMatch}
 									<p class="text-on-surface-variant mt-2 text-sm">
 										Matches your current trade cadence suggestion ({tradeStyleLabel(
-											SCHEDULE_PRESET_OPTIONS.find((o) => o.value === schedule.suggestedPreset)
+											SCHEDULE_PRESET_OPTIONS.find((o) => o.value === schedule?.suggestedPreset)
 												?.cadence ?? 'balanced'
 										)}).
 									</p>
 								{:else}
 									<p class="text-on-surface-variant mt-2 text-sm">
 										Differs from suggested cadence preset
-										{SCHEDULE_PRESET_OPTIONS.find((o) => o.value === schedule.suggestedPreset)
+										{SCHEDULE_PRESET_OPTIONS.find((o) => o.value === schedule?.suggestedPreset)
 											?.label ?? schedule.suggestedPreset}.
 									</p>
 								{/if}
@@ -498,7 +498,7 @@
 											type="checkbox"
 											checked={schedule.runMissed}
 											disabled={scheduleBusy}
-											onchange={() => setScheduleRunMissed(!schedule.runMissed)}
+											onchange={() => setScheduleRunMissed(!schedule?.runMissed)}
 										/>
 									</Checkbox>
 								</label>
