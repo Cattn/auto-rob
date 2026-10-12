@@ -12,6 +12,7 @@ export {
   MCP_NAME,
   MCP_URL,
   isHarnessId,
+  isHarnessReady,
 } from "./types.js";
 export {
   getHarnessModel,

@@ -81,6 +81,7 @@ export type HarnessConnection = {
 	id: HarnessId;
 	binaryPath: string | null;
 	binaryOk: boolean;
+	agentAuthenticated?: boolean;
 	mcpConfigured: boolean;
 	mcpAuthenticated: boolean;
 	label: string;

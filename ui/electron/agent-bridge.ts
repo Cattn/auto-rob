@@ -33,6 +33,7 @@ import {
 	getHarness,
 	getHarnessModels,
 	isHarnessId,
+	isHarnessReady,
 	listHarnessStatuses,
 	migrateModelId,
 	setActiveHarness,
@@ -576,7 +577,7 @@ export class AgentBridge {
 				this.getHarnesses(),
 			]);
 			const active = harnesses.find((h) => h.id === activeHarness) ?? null;
-			const ok = Boolean(active?.binaryOk);
+			const ok = Boolean(active && isHarnessReady(active));
 			return {
 				ok,
 				repoRoot,
@@ -835,10 +836,8 @@ export class AgentBridge {
 	}
 
 	private async harnessReady(): Promise<boolean> {
-		const list = await this.getHarnesses();
-		return list.some(
-			(h) => h.binaryOk && h.mcpConfigured && h.mcpAuthenticated,
-		);
+		const [list, activeId] = await Promise.all([this.getHarnesses(), this.getActiveHarness()]);
+		return list.some((h) => h.id === activeId && isHarnessReady(h));
 	}
 
 	private async currentTradeStyle(): Promise<TradeStyle> {

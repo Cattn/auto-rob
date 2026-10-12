@@ -6,6 +6,7 @@ export type HarnessConnection = {
   id: HarnessId;
   binaryPath: string | null;
   binaryOk: boolean;
+  agentAuthenticated?: boolean;
   mcpConfigured: boolean;
   mcpAuthenticated: boolean;
   label: string;
@@ -35,6 +36,11 @@ export interface AgentHarness {
 }
 
 export const MCP_NAME = "robinhood-trading";
+
+export function isHarnessReady(h: HarnessConnection): boolean {
+  return h.binaryOk && h.mcpConfigured && h.mcpAuthenticated &&
+    (h.id !== "codex" || h.agentAuthenticated === true);
+}
 export const MCP_URL = "https://agent.robinhood.com/mcp/trading";
 
 export const HARNESS_LABELS: Record<HarnessId, string> = {

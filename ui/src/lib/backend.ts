@@ -64,3 +64,5 @@ export function getBackend(): AutoRobApi | null {
 export function isElectron(): boolean {
 	return getBackend() !== null;
 }
+
+export { isHarnessReady } from "../../../harness/types";

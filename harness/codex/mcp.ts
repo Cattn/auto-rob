@@ -39,8 +39,8 @@ export async function listCodexMcp(
         transport: { type: string; url?: string };
       }>;
       const server = servers.find((entry) => entry.name === MCP_NAME);
-      configured = Boolean(server?.enabled &&
-        server.transport.type === "streamable_http" && server.transport.url === MCP_URL);
+      configured = Boolean(server?.enabled === true &&
+        server.transport?.type === "streamable_http" && server.transport.url === MCP_URL);
       const auth = server?.auth_status?.replaceAll("_", "").toLowerCase();
       authenticated = configured && (auth === "oauth" || auth === "bearertoken");
     } catch {
@@ -53,6 +53,11 @@ export async function listCodexMcp(
     configured,
     authenticated,
   };
+}
+
+export async function codexLoginStatus(codex: string, workspace: string): Promise<boolean> {
+  const result = await runCommand(codex, ["login", "status"], workspace);
+  return result.code === 0;
 }
 
 export async function ensureCodexMcp(
@@ -103,19 +108,24 @@ export async function codexStatusForWorkspace(
         label,
         binaryPath,
         binaryOk: false,
+        agentAuthenticated: false,
         mcpConfigured: false,
         mcpAuthenticated: false,
         model,
         error: "codex --version failed",
       };
     }
-    const listed = await listCodexMcp(binaryPath, workspace);
+    const [listed, agentAuthenticated] = await Promise.all([
+      listCodexMcp(binaryPath, workspace),
+      codexLoginStatus(binaryPath, workspace),
+    ]);
     if (listed.code !== 0) {
       return {
         id: "codex",
         label,
         binaryPath,
         binaryOk: true,
+        agentAuthenticated,
         mcpConfigured: false,
         mcpAuthenticated: false,
         model,
@@ -127,10 +137,13 @@ export async function codexStatusForWorkspace(
       label,
       binaryPath,
       binaryOk: true,
+      agentAuthenticated,
       mcpConfigured: listed.configured,
       mcpAuthenticated: listed.authenticated,
       model,
-      error: listed.authenticated ? null : "Connect Robinhood with codex mcp login robinhood-trading before running auto-rob.",
+      error: !agentAuthenticated
+        ? "Sign in to ChatGPT using Connect before running auto-rob."
+        : listed.authenticated ? null : "Connect Robinhood before running auto-rob.",
     };
   } catch (err) {
     return {
@@ -138,6 +151,7 @@ export async function codexStatusForWorkspace(
       label,
       binaryPath: null,
       binaryOk: false,
+      agentAuthenticated: false,
       mcpConfigured: false,
       mcpAuthenticated: false,
       model,
@@ -152,6 +166,13 @@ export async function codexConnectForWorkspace(
 ): Promise<HarnessConnection> {
   const login = opts.login !== false;
   const codex = await resolveCodexCommand();
+  if (login && !(await codexLoginStatus(codex, workspace))) {
+    console.log(dim("starting ChatGPT sign-in (finish in browser)…"));
+    const result = await runCommand(codex, ["login"], workspace);
+    if (result.code !== 0 || !(await codexLoginStatus(codex, workspace))) {
+      throw new Error("ChatGPT sign-in failed. Try Connect again.");
+    }
+  }
   await ensureCodexMcp(codex, workspace);
   if (login) {
     const result = await loginCodexMcp(codex, workspace);

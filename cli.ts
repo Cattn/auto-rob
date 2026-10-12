@@ -1,7 +1,6 @@
 import path from "node:path";
 import { access } from "node:fs/promises";
-import { getActiveHarness } from "./harness/index.js";
-import { runCommand } from "./harness/util.js";
+import { getActiveHarness, isHarnessReady } from "./harness/index.js";
 import { loadEnvFile } from "./notify.js";
 import { runPortfolio } from "./run.js";
 import { resolveDefaultWorkspace } from "./workspace.js";
@@ -28,13 +27,8 @@ async function main(): Promise<number> {
   const status = await harness.status();
   console.log(`workspace: ${workspace}`);
   console.log(`harness: ${harness.id}`);
-  if (!status.binaryOk || !status.mcpConfigured || !status.mcpAuthenticated) {
+  if (!isHarnessReady(status)) {
     throw new Error(status.error || "Connect the active harness to Robinhood in auto-rob Settings first.");
-  }
-  if (harness.id === "codex") {
-    const login = await runCommand(await harness.resolve(), ["login", "status"], workspace);
-    if (login.code !== 0) throw new Error("Sign in using codex login before running auto-rob.");
-    console.log(login.stdout.trim() || login.stderr.trim());
   }
   if (args.includes("--check")) {
     console.log("CLI, sign-in, and saved Robinhood authorization found. No portfolio job was started.");

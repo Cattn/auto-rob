@@ -9,7 +9,7 @@ import {
   sendBriefFile,
   SENT_MARKER,
 } from "./notify.js";
-import { getActiveHarness, getActiveHarnessId } from "./harness/index.js";
+import { getActiveHarness, getActiveHarnessId, isHarnessReady } from "./harness/index.js";
 import {
   formatConstraintsSection,
   hasConstraints,
@@ -201,6 +201,13 @@ export async function runPortfolio(
   opts: RunPortfolioOptions = {},
 ): Promise<number> {
   await loadEnvFile(workspace);
+  if (opts.signal?.aborted) return 130;
+  const harness = await getActiveHarness(workspace);
+  const status = await harness.status();
+  if (!isHarnessReady(status)) {
+    throw new Error(status.error || "Connect the active harness in Settings before running auto-rob.");
+  }
+  if (opts.signal?.aborted) return 130;
   await clearNotifyArtifacts(workspace);
   const basePrompt = await readFile(path.join(workspace, "prompt.md"), "utf8");
   const [priorLog, longTerm, userNotes, constraints] = await Promise.all([
@@ -241,7 +248,6 @@ export async function runPortfolio(
   }
 
   const activeId = await getActiveHarnessId(workspace);
-  const harness = await getActiveHarness(workspace);
   console.log(dim(`active harness: ${activeId} (${harness.label})`));
 
   const code = await harness.run({

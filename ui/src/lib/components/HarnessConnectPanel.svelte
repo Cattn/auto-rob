@@ -1,8 +1,9 @@
 <script module lang="ts">
 	import type { HarnessConnection } from '$lib/backend';
+	import { isHarnessReady } from '$lib/backend';
 
 	export function isRunReady(h: HarnessConnection): boolean {
-		return h.binaryOk && h.mcpConfigured && h.mcpAuthenticated;
+		return isHarnessReady(h);
 	}
 
 	export function anyRunReady(list: HarnessConnection[]): boolean {
@@ -32,20 +33,22 @@
 
 	const connectMessage = $derived.by(() => {
 		if (connectError) return connectError;
+		if (connectingId === 'codex') return 'Finish ChatGPT sign-in and Robinhood authorization in your browser, then return here.';
 		if (!pendingBrowserId) return null;
 		const match = harnesses.find((h) => h.id === pendingBrowserId);
-		if (match?.mcpConfigured && match.mcpAuthenticated) return null;
+		if (match && isRunReady(match)) return null;
 		return browserOpenedMessage;
 	});
 
 	function statusText(h: HarnessConnection): string {
 		if (!h.binaryOk) return 'CLI missing';
+		if (h.id === 'codex' && !h.agentAuthenticated) return 'needs ChatGPT sign-in';
 		if (!h.mcpConfigured || !h.mcpAuthenticated) return 'needs Robinhood connect';
 		return 'connected';
 	}
 
 	function needsConnect(h: HarnessConnection): boolean {
-		return h.binaryOk && (!h.mcpConfigured || !h.mcpAuthenticated);
+		return h.binaryOk && !isRunReady(h);
 	}
 
 	function installHelp(h: HarnessConnection): string {
@@ -70,8 +73,9 @@
 		pendingBrowserId = null;
 		try {
 			const status = await api.connectHarness(id);
+			harnesses = harnesses.map((h) => h.id === id ? status : h);
 			pendingBrowserId =
-				status.mcpConfigured && status.mcpAuthenticated ? null : id;
+				isRunReady(status) ? null : id;
 			onrefresh?.();
 		} catch (err) {
 			connectError = err instanceof Error ? err.message : String(err);
@@ -97,6 +101,8 @@
 						<p class="text-on-surface-variant mt-0.5 text-sm leading-relaxed">
 							{#if !h.binaryOk}
 								{installHelp(h)}
+							{:else if h.id === 'codex' && !h.agentAuthenticated}
+								Sign in to ChatGPT, then connect Robinhood
 							{:else if needsConnect(h)}
 								Binary ready — finish Robinhood connect
 							{:else}
@@ -108,7 +114,7 @@
 						<span
 							class={[
 								'rounded-md px-2.5 py-1 text-xs font-medium',
-								h.binaryOk && h.mcpConfigured && h.mcpAuthenticated
+								isRunReady(h)
 									? 'bg-primary/15 text-primary'
 									: 'bg-error-container text-on-error-container'
 							]}
