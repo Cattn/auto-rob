@@ -1,20 +1,45 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
-import started from "electron-squirrel-startup";
 import { AgentBridge } from "./agent-bridge";
 import { IPC } from "../shared/ipc";
-
-if (started) {
-	app.quit();
-}
+import { runCli } from "../../cli";
+import { handleSquirrelEvent, installCli } from "./cli-install";
 
 const catchUp = process.argv.includes("--schedule-catch-up");
 const runOnce = process.argv.includes("--run-once") || catchUp;
+const args = process.argv.slice(app.isPackaged ? 1 : 2);
+const squirrelEvent = process.platform === "win32" ? args.find((arg) =>
+	["--squirrel-install", "--squirrel-updated", "--squirrel-uninstall", "--squirrel-obsolete"].includes(arg),
+) : undefined;
+const started = squirrelEvent !== undefined;
+const cliMode = !started && !runOnce && (args.includes("--cli") || args.some((arg) =>
+	["list", "--list-models", "--check", "--help", "--version", "--model", "--harness", "--thinking", "--context"].includes(arg),
+));
 const bridge = new AgentBridge();
 
-const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) {
+const gotLock = !started && !cliMode && app.requestSingleInstanceLock();
+if (!started && !cliMode && !gotLock) {
 	app.quit();
+}
+
+if (started) {
+	void handleSquirrelEvent(squirrelEvent).then(() => app.quit(), (error) => {
+		console.error("CLI installation failed", error);
+		app.exit(1);
+	});
+} else if (cliMode) {
+	app.disableHardwareAcceleration();
+	if (process.platform === "linux") app.commandLine.appendSwitch("ozone-platform", "headless");
+	const exit = async (code: number) => {
+		await Promise.all([process.stdout, process.stderr].map((stream) =>
+			new Promise<void>((resolve) => stream.write("", () => resolve())),
+		));
+		app.exit(code);
+	};
+	void runCli(args.filter((arg) => arg !== "--cli"), app.getVersion()).then(exit, async (error) => {
+		console.error(error instanceof Error ? error.message : String(error));
+		await exit(1);
+	});
 }
 
 let ipcRegistered = false;
@@ -180,6 +205,9 @@ if (gotLock) {
 
 		registerIpc();
 		createWindow();
+		if (app.isPackaged) {
+			void installCli().catch((error) => console.error("CLI installation failed", error));
+		}
 		void bridge.syncScheduleOnLaunch().catch((err) => {
 			console.error("schedule sync on launch failed", err);
 		});

@@ -6,7 +6,7 @@ export default mergeConfig(mainConfig, defineConfig({
     target: "node22",
     outDir: "headless",
     lib: {
-      entry: "../cli.ts",
+      entry: "../cli-entry.ts",
       fileName: "cli",
     },
   },

@@ -4,12 +4,18 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.release.assets[0] == null
     strategy:
       fail-fast: false
       matrix:
@@ -22,7 +28,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || github.ref_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
           fetch-depth: 0
 
       - name: Ensure tag is on main
@@ -39,7 +45,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y fakeroot dpkg rpm squashfs-tools
+          sudo apt-get install -y fakeroot dpkg rpm squashfs-tools xvfb
         working-directory: .
 
       - name: Setup pnpm
@@ -64,6 +70,39 @@ jobs:
       - name: Build installers
         run: pnpm run make
 
+      - name: Verify command installation
+        run: node --experimental-strip-types scripts/verify-cli-install.mjs
+
+      - name: Verify packaged CLI
+        shell: bash
+        run: node scripts/verify-cli.mjs
+
+      - name: Verify installed Windows CLI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem out/make/squirrel.windows/x64/*Setup.exe).FullName
+          $installer = Start-Process -FilePath $setup -ArgumentList '--silent' -Wait -PassThru
+          if ($installer.ExitCode -ne 0) { throw "Installer failed: $($installer.ExitCode)" }
+          $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+          auto-rob --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify installed macOS CLI
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          sudo installer -pkg out/make/*.pkg -target /
+          /usr/local/bin/auto-rob --version
+
+      - name: Verify installed Linux CLI
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo dpkg -i out/make/deb/x64/*.deb
+          test -x /usr/bin/auto-rob
+          auto-rob --version
+
       - name: Collect installers
         shell: bash
         run: |
@@ -71,6 +110,7 @@ jobs:
           find out/make -type f \( \
             -name '*Setup.exe' -o \
             -name '*.dmg' -o \
+            -name '*.pkg' -o \
             -name '*.deb' -o \
             -name '*.rpm' -o \
             -name '*.AppImage' -o \
@@ -84,6 +124,7 @@ jobs:
         with:
           files: release-assets/*
           fail_on_unmatched_files: true
-          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          tag_name: ${{ github.event.release.tag_name || inputs.tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

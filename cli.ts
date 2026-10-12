@@ -5,8 +5,11 @@ import { loadEnvFile } from "./notify.js";
 import { runPortfolio } from "./run.js";
 import { resolveDefaultWorkspace } from "./workspace.js";
 
-async function main(): Promise<number> {
-  const args = process.argv.slice(2);
+export async function runCli(args: string[], version: string): Promise<number> {
+  if (args.includes("--version")) {
+    console.log(version);
+    return 0;
+  }
   const flags = new Map<string, string>();
   let list = false;
   let check = false;
@@ -26,6 +29,7 @@ async function main(): Promise<number> {
     } else throw new Error(`Unknown argument: ${arg}. Use --help for usage.`);
   }
   if (args.includes("--help")) {
+    console.log("Usage: auto-rob [list [cursor|codex] | --check | --help | --version]");
     console.log("Run one portfolio job using the desktop app's workspace and active harness.");
     console.log("--check checks setup without running the agent or trading.");
     console.log("list [cursor|codex] lists models, thinking levels, and known context limits. --json outputs JSON.");
@@ -92,11 +96,3 @@ async function main(): Promise<number> {
     process.removeListener("SIGTERM", abort);
   }
 }
-
-main().then(
-  (code) => { process.exitCode = code; },
-  (error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  },
-);
