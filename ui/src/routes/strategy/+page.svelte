@@ -39,6 +39,7 @@
 	let newRationale = $state('');
 	let newCheckAfter = $state('');
 	let newPinned = $state(false);
+	let expandedIds = $state<string[]>([]);
 
 	function tradeStyleLabel(style: TradeStyle): string {
 		if (style === 'more_active') return 'More active / faster trades';
@@ -79,6 +80,40 @@
 		doNotSellText = tickersToText(c.doNotSell);
 		maxPositionPctText = c.maxPositionPct == null ? '' : String(c.maxPositionPct);
 		constraintsNotes = c.notes;
+	}
+
+	function titleParts(title: string): { symbol: string | null; text: string } {
+		const match = title.match(/^([A-Z][A-Z0-9.]{0,9})\s+[—–-]\s+(\S.*)$/);
+		if (!match) return { symbol: null, text: title };
+		return { symbol: match[1], text: match[2] };
+	}
+
+	function isIsoDate(value: string): boolean {
+		return /^\d{4}-\d{2}-\d{2}$/.test(value);
+	}
+
+	function formatCheckAfter(value: string): string {
+		if (!isIsoDate(value)) return value;
+		const [year, month, day] = value.split('-').map(Number);
+		return new Intl.DateTimeFormat(undefined, {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		}).format(new Date(year, month - 1, day));
+	}
+
+	function itemIsVerbose(item: LongTermItem): boolean {
+		return (
+			item.title.length > 110 ||
+			item.rationale.length > 180 ||
+			(item.checkAfter != null && !isIsoDate(item.checkAfter) && item.checkAfter.length > 40)
+		);
+	}
+
+	function toggleExpanded(id: string) {
+		expandedIds = expandedIds.includes(id)
+			? expandedIds.filter((itemId) => itemId !== id)
+			: [...expandedIds, id];
 	}
 
 	function startEdit(item: LongTermItem) {
@@ -491,11 +526,31 @@
 												</div>
 											</div>
 										{:else}
-											<div class="flex flex-wrap items-start justify-between gap-2">
+											{@const parts = titleParts(item.title)}
+											{@const verbose = itemIsVerbose(item)}
+											{@const expanded = expandedIds.includes(item.id)}
+											<div class="flex items-start justify-between gap-2">
 												<div class="min-w-0">
-													<p class="text-on-surface text-sm font-medium">{item.title}</p>
-													<p class="text-on-surface-variant mt-0.5 text-sm">
-														{item.type} · {item.size} · {item.source}
+													<div class="flex items-start gap-2">
+														{#if parts.symbol}
+															<span
+																class="bg-surface-container-high text-on-surface mt-px shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold tracking-wide"
+															>
+																{parts.symbol}
+															</span>
+														{/if}
+														<p
+															class={[
+																'text-on-surface text-sm font-medium leading-snug',
+																!expanded && verbose && 'line-clamp-2'
+															]}
+														>
+															{parts.symbol ? parts.text : item.title}
+														</p>
+													</div>
+													<p class="text-on-surface-variant mt-1 text-xs">
+														{item.type} · {item.size}{#if item.source === 'user'} · you{/if}{#if item.checkAfter && isIsoDate(item.checkAfter)}
+															· {formatCheckAfter(item.checkAfter)}{/if}
 													</p>
 												</div>
 												{#if item.pinned}
@@ -506,15 +561,34 @@
 													</span>
 												{/if}
 											</div>
-											{#if item.checkAfter}
-												<p class="text-on-surface-variant mt-2 text-sm">
+											{#if item.checkAfter && !isIsoDate(item.checkAfter)}
+												<p
+													class={[
+														'text-on-surface-variant mt-2 text-sm leading-relaxed',
+														!expanded && 'line-clamp-3'
+													]}
+												>
 													Check after: {item.checkAfter}
 												</p>
 											{/if}
 											{#if item.rationale}
-												<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+												<p
+													class={[
+														'text-on-surface-variant mt-1.5 text-sm leading-relaxed',
+														!expanded && 'line-clamp-3'
+													]}
+												>
 													{item.rationale}
 												</p>
+											{/if}
+											{#if verbose}
+												<button
+													type="button"
+													class="text-primary mt-1 text-xs font-medium"
+													onclick={() => toggleExpanded(item.id)}
+												>
+													{expanded ? 'Show less' : 'Show more'}
+												</button>
 											{/if}
 											<div class="mt-2.5 flex flex-wrap items-center gap-1.5">
 												<Button

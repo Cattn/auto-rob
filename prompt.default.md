@@ -53,37 +53,37 @@ Keep it short and scannable. Include:
 Do not dump raw tool output into the log. The next agent will see this file automatically.
 
 ## long-term.md
-A durable file for broader goals, multi-run todos, and high-signal things to watch. Unlike `run-log.md`, do **not** overwrite it each run. Preserve existing entries unless they are done or irrelevant — then remove them.
+A durable file for broader goals, multi-run todos, and high-signal watches. Unlike `run-log.md`, do **not** overwrite it each run. The Strategy page shows one row per item, so this file has to stay scannable.
 
 Rules:
-1. **Only add when confident it matters.** Add long-term goals, todos, or watches only if they are clearly interesting and worth tracking across runs. Skip minor, one-off, or low-conviction noise — those belong in `run-log.md` (or nowhere).
-2. **Do not overwrite live entries.** Keep existing items intact. Only remove an entry when it is completed, invalidated, or no longer relevant. When removing, drop it entirely (do not leave a graveyard of done items).
-3. **Pass through broader goals.** This file is the consistent continuity layer for multi-run intent (e.g. build toward N positions, watch a sector theme, wait for a catalyst). Future agents should treat it as standing guidance alongside the run log.
-4. **Preserve user items.** Entries with `source: user` were added by the account owner. Do not delete or rewrite them unless clearly completed/invalidated. Prefer updating your own (`source: agent`) items.
-5. **Honor pins.** Items with `pinned: true` are high priority / focus. Weight them heavily in research and decisions this run.
+1. **Only add when confident it matters.** Add a goal, todo, or watch only if it is worth tracking across runs. One-off noise belongs in `run-log.md`.
+2. **One item per ticker or theme.** A portfolio review is many items, not one. If an agent item names more than one ticker, split it on this run and delete the combined item.
+3. **Keep the rule, not the tape.** Session prices, day ranges, and percent moves belong in `run-log.md`. A long-term item is the decision that should still make sense next week. Remove an item only when it is completed, invalidated, or no longer relevant — drop it, do not leave a graveyard.
+4. **Preserve user items.** Entries with `source: user` were added by the account owner. Do not delete or rewrite them unless clearly completed or invalidated. Update your own (`source: agent`) items, including splitting and shortening ones that grew into a tape dump.
+5. **Honor pins.** Items with `pinned: true` are high priority. Weight them heavily this run.
 6. **Use the required item format only.** Each item is a `## lt_<id>` block with the fields below. When creating a new item, generate a fresh id like `lt_` plus 12 hex characters. Keep the `# Long-term` file header.
 
 Required shape per item:
 ```
 ## lt_01abcdef0123
-- title: Build toward 6 positions
-- type: goal
+- title: GOOGL — first add while it holds the 50-day
+- type: watch
 - size: medium
 - pinned: false
 - source: agent
 - added: 2026-07-24
 - check_after: 2026-08-01
-- rationale: Under-diversified vs standing goals
+- rationale: Cut only on a clear thesis break. This is the first place for new cash while that holds.
 ```
 
 Field rules:
-- `title` — one line
+- `title` — one line, under 90 characters, shaped as `TICKER — what to do`
 - `type` — `goal` | `watch` | `todo`
 - `size` — `small` | `medium` | `large`
 - `pinned` — `true` | `false`
 - `source` — `agent` for items you add; never set `source: user`
 - `added` — ISO date `YYYY-MM-DD`
-- `check_after` — optional ISO date when useful
-- `rationale` — 1–2 short sentences
+- `check_after` — omit unless there is a real date (`YYYY-MM-DD`), such as earnings or ex-div
+- `rationale` — one or two sentences. No prices from today
 
-Create `long-term.md` if missing and you have something worth recording. If nothing qualifies, leave the file unchanged (or create an empty stub only if it does not exist and you have nothing to add — prefer leaving it absent until the first real entry).
+Create `long-term.md` if missing and you have something worth recording. If nothing qualifies, leave the file unchanged.

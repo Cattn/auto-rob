@@ -26,11 +26,57 @@ const MIGRATE_FILES = [
   path.join(".cursor", "permissions.json"),
 ] as const;
 
+export const LONG_TERM_PROMPT_HEADING = "## long-term.md";
+
 function pathExists(filePath: string): Promise<boolean> {
   return access(filePath).then(
     () => true,
     () => false,
   );
+}
+
+function withTrailingNewline(contents: string): string {
+  return contents.endsWith("\n") ? contents : `${contents}\n`;
+}
+
+function sectionEnd(lines: string[], start: number): number {
+  let fence = false;
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith("```")) {
+      fence = !fence;
+      continue;
+    }
+    if (!fence && /^#{1,2}\s+\S/.test(line)) return i;
+  }
+  return lines.length;
+}
+
+export function extractPromptSection(
+  markdown: string,
+  heading: string,
+): string | null {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const start = lines.findIndex((line) => line.trim() === heading);
+  if (start < 0) return null;
+  return lines.slice(start, sectionEnd(lines, start)).join("\n").trim();
+}
+
+export function replacePromptSection(
+  markdown: string,
+  heading: string,
+  section: string,
+): string {
+  const normalized = section.replace(/\r\n/g, "\n").trim();
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const start = lines.findIndex((line) => line.trim() === heading);
+  if (start < 0) {
+    return `${lines.join("\n").trimEnd()}\n\n${normalized}\n`;
+  }
+  const before = lines.slice(0, start).join("\n").trimEnd();
+  const after = lines.slice(sectionEnd(lines, start)).join("\n").trim();
+  if (!after) return `${before}\n\n${normalized}\n`;
+  return `${before}\n\n${normalized}\n\n${after}\n`;
 }
 
 async function writeIfMissing(
@@ -73,11 +119,31 @@ export async function ensureWorkspaceSeeded(
   await mkdir(workspace, { recursive: true });
   await mkdir(path.join(workspace, ".cursor"), { recursive: true });
 
-  await writeIfMissing(
-    path.join(workspace, "prompt.default.md"),
-    defaults.promptDefault,
+  const promptDefault = withTrailingNewline(defaults.promptDefault);
+  const promptDefaultPath = path.join(workspace, "prompt.default.md");
+  const currentDefault = await readFile(promptDefaultPath, "utf8").catch(() => "");
+  if (currentDefault.replace(/\r\n/g, "\n") !== promptDefault) {
+    await writeFile(promptDefaultPath, promptDefault, "utf8");
+  }
+
+  const promptPath = path.join(workspace, "prompt.md");
+  const longTermSection = extractPromptSection(
+    promptDefault,
+    LONG_TERM_PROMPT_HEADING,
   );
-  await writeIfMissing(path.join(workspace, "prompt.md"), defaults.promptDefault);
+  if (!(await pathExists(promptPath))) {
+    await writeFile(promptPath, promptDefault, "utf8");
+  } else if (longTermSection) {
+    const current = await readFile(promptPath, "utf8");
+    const next = replacePromptSection(
+      current,
+      LONG_TERM_PROMPT_HEADING,
+      longTermSection,
+    );
+    if (next !== current.replace(/\r\n/g, "\n")) {
+      await writeFile(promptPath, next, "utf8");
+    }
+  }
   await writeIfMissing(path.join(workspace, "notes.md"), "");
   await writeIfMissing(path.join(workspace, "run-log.md"), "");
   await writeIfMissing(path.join(workspace, "long-term.md"), "");
