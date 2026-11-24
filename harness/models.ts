@@ -1,11 +1,11 @@
-import spawn from "cross-spawn";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { resolveAgentCommand } from "../resolve-agent.js";
 import { resolveCodexCommand } from "../resolve-codex.js";
+import { queryCodexAppServer } from "./codex/app-server.js";
 import type { HarnessId, HarnessModel, HarnessSelection } from "./types.js";
-import { consumeJsonLines, killProcessTree, runCommand } from "./util.js";
+import { runCommand } from "./util.js";
 
 export function parseCursorModels(output: string): HarnessModel[] {
   const models: HarnessModel[] = [];
@@ -41,68 +41,26 @@ type CodexModel = {
 };
 
 async function codexModelList(command: string, cwd?: string): Promise<CodexModel[]> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, ["app-server"], {
-      cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
-    });
-    const buffer = { value: "" };
+  return queryCodexAppServer(command, cwd, "Codex model discovery", async (request) => {
     const models: CodexModel[] = [];
     const cursors = new Set<string>();
-    let settled = false;
-    let requestId = 1;
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      child.stdin?.end();
-      killProcessTree(child);
-      if (error) reject(error);
-      else resolve(models);
-    };
-    const timer = setTimeout(() => finish(new Error("Codex model discovery timed out.")), 20_000);
-    const send = (message: object) => child.stdin?.write(`${JSON.stringify(message)}\n`);
-    const list = (cursor?: string) => {
-      requestId += 1;
-      send({ id: requestId, method: "model/list", params: { limit: 100, includeHidden: false, cursor } });
-    };
-    child.stdin?.on("error", (error) => finish(error));
-    child.on("error", (error) => finish(error));
-    child.on("close", (code) => finish(new Error(`Codex model discovery exited before responding (exit ${code}).`)));
-    child.stderr?.resume();
-    child.stdout?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => consumeJsonLines(chunk, buffer, (line) => {
-      if (settled) return;
-      try {
-        const message = JSON.parse(line);
-        if (message.id !== requestId) return;
-        if (message.error) {
-          finish(new Error(message.error.message || "Codex model discovery failed."));
-          return;
+    let cursor: string | undefined;
+    do {
+      const result = await request("model/list", { limit: 100, includeHidden: false, cursor }) as {
+        data?: CodexModel[];
+        nextCursor?: string | null;
+      } | null;
+      if (!Array.isArray(result?.data)) throw new Error("Invalid Codex model catalog.");
+      models.push(...result.data);
+      cursor = result.nextCursor || undefined;
+      if (cursor) {
+        if (typeof cursor !== "string" || cursors.has(cursor) || cursors.size >= 100) {
+          throw new Error("Invalid Codex model catalog pagination.");
         }
-        if (requestId === 1) {
-          send({ method: "initialized" });
-          list();
-          return;
-        }
-        if (!Array.isArray(message.result?.data)) {
-          finish(new Error("Invalid Codex model catalog."));
-          return;
-        }
-        models.push(...message.result.data);
-        const cursor = message.result.nextCursor;
-        if (cursor) {
-          if (typeof cursor !== "string" || cursors.has(cursor) || cursors.size >= 100) {
-            finish(new Error("Invalid Codex model catalog pagination."));
-            return;
-          }
-          cursors.add(cursor);
-          list(cursor);
-        } else finish();
-      } catch {
-        finish(new Error("Invalid JSON from Codex model discovery."));
+        cursors.add(cursor);
       }
-    }));
-    send({ id: 1, method: "initialize", params: { clientInfo: { name: "auto_rob", version: "0.1.0" } } });
+    } while (cursor);
+    return models;
   });
 }
 

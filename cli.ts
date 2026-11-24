@@ -1,6 +1,7 @@
 import path from "node:path";
 import { access } from "node:fs/promises";
 import { getActiveHarness, getHarnessSelection, isHarnessId, isHarnessReady, listModels, validateSelection } from "./harness/index.js";
+import { getCodexProvider } from "./harness/codex/app-server.js";
 import { loadEnvFile } from "./notify.js";
 import { runPortfolio } from "./run.js";
 import { resolveDefaultWorkspace } from "./workspace.js";
@@ -22,7 +23,7 @@ export async function runCli(args: string[], version: string): Promise<number> {
       if (isHarnessId(args[i + 1] ?? "")) flags.set("--harness", args[++i]);
     } else if (arg === "--check") check = true;
     else if (arg === "--json") json = true;
-    else if (["--harness", "--model", "--thinking", "--context"].includes(arg)) {
+    else if (["--harness", "--model", "--thinking", "--context", "--codex-provider"].includes(arg)) {
       const value = args[++i];
       if (!value || value.startsWith("--")) throw new Error(`Missing value for ${arg}.`);
       flags.set(arg, value);
@@ -34,6 +35,7 @@ export async function runCli(args: string[], version: string): Promise<number> {
     console.log("--check checks setup without running the agent or trading.");
     console.log("list [cursor|codex] lists models, thinking levels, and known context limits. --json outputs JSON.");
     console.log("--harness cursor|codex selects the harness for this command.");
+    console.log("--codex-provider ID selects a provider configured in Codex. AUTO_ROB_CODEX_PROVIDER sets the same option.");
     console.log("--model ID --thinking LEVEL --context TOKENS override model settings for one run (or --check).");
     console.log("AUTO_ROB_WORKSPACE overrides the default OS user-data workspace.");
     return 0;
@@ -44,6 +46,11 @@ export async function runCli(args: string[], version: string): Promise<number> {
   const id = flags.get("--harness");
   if (id && !isHarnessId(id)) throw new Error("Harness must be cursor or codex.");
   if (id) process.env.AUTO_ROB_HARNESS = id;
+  const provider = flags.get("--codex-provider");
+  if (provider !== undefined) {
+    if (!provider.trim()) throw new Error("Missing value for --codex-provider.");
+    process.env.AUTO_ROB_CODEX_PROVIDER = provider;
+  }
   if (list) {
     if (check || ["--model", "--thinking", "--context"].some((flag) => flags.has(flag))) {
       throw new Error("Model listing cannot be combined with run or check options.");
@@ -78,11 +85,13 @@ export async function runCli(args: string[], version: string): Promise<number> {
   const status = await harness.status();
   console.log(`workspace: ${workspace}`);
   console.log(`harness: ${harness.id}`);
+  const codexProvider = harness.id === "codex" ? getCodexProvider() : undefined;
+  if (codexProvider) console.log(`codex provider: ${codexProvider}`);
   if (!isHarnessReady(status)) {
     throw new Error(status.error || "Connect the active harness to Robinhood in auto-rob Settings first.");
   }
   if (check) {
-    console.log("CLI, sign-in, and saved Robinhood authorization found. No portfolio job was started.");
+    console.log("CLI, model provider setup, and saved Robinhood authorization checks passed. No portfolio job was started.");
     return 0;
   }
   const controller = new AbortController();

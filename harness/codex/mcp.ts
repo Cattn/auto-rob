@@ -8,6 +8,7 @@ import {
   type HarnessConnection,
 } from "../types.js";
 import { dim, runCommand } from "../util.js";
+import { getCodexProvider, queryCodexAppServer } from "./app-server.js";
 
 export async function codexVersion(
   codex: string,
@@ -58,6 +59,24 @@ export async function listCodexMcp(
 export async function codexLoginStatus(codex: string, workspace: string): Promise<boolean> {
   const result = await runCommand(codex, ["login", "status"], workspace);
   return result.code === 0;
+}
+
+async function codexRequiresOpenAiAuth(codex: string, workspace: string): Promise<boolean> {
+  const provider = getCodexProvider();
+  if (!provider) return true;
+  return queryCodexAppServer(codex, workspace, `Codex provider check for ${JSON.stringify(provider)}`, async (request) => {
+    const account = await request("account/read", { refreshToken: false }) as {
+      requiresOpenaiAuth?: boolean;
+    } | null;
+    if (typeof account?.requiresOpenaiAuth !== "boolean") {
+      throw new Error("Codex did not report whether the selected provider requires OpenAI authentication. Update Codex and check the provider configuration.");
+    }
+    return account.requiresOpenaiAuth;
+  });
+}
+
+async function codexAgentReady(codex: string, workspace: string): Promise<boolean> {
+  return !(await codexRequiresOpenAiAuth(codex, workspace)) || codexLoginStatus(codex, workspace);
 }
 
 export async function ensureCodexMcp(
@@ -117,7 +136,7 @@ export async function codexStatusForWorkspace(
     }
     const [listed, agentAuthenticated] = await Promise.all([
       listCodexMcp(binaryPath, workspace),
-      codexLoginStatus(binaryPath, workspace),
+      codexAgentReady(binaryPath, workspace),
     ]);
     if (listed.code !== 0) {
       return {
@@ -166,7 +185,7 @@ export async function codexConnectForWorkspace(
 ): Promise<HarnessConnection> {
   const login = opts.login !== false;
   const codex = await resolveCodexCommand();
-  if (login && !(await codexLoginStatus(codex, workspace))) {
+  if (login && !(await codexAgentReady(codex, workspace))) {
     console.log(dim("starting ChatGPT sign-in (finish in browser)…"));
     const result = await runCommand(codex, ["login"], workspace);
     if (result.code !== 0 || !(await codexLoginStatus(codex, workspace))) {

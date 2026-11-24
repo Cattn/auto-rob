@@ -22,12 +22,17 @@ await writeFile(fakeCommand, process.platform === 'win32'
 await writeFile(fake, `
 const fs = require('node:fs');
 const args = process.argv.slice(2);
+const provider = args.find(arg => arg.startsWith('model_provider='));
 if (args[0] === 'app-server') {
+  if (provider === 'model_provider="missing"') process.exit(1);
   require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
     const request = JSON.parse(line);
     if (request.method === 'initialize') console.log(JSON.stringify({ id: request.id, result: {} }));
+    if (request.method === 'account/read') console.log(JSON.stringify({ id: request.id, result: {
+      account: null, requiresOpenaiAuth: provider !== 'model_provider="cliproxy"'
+    } }));
     if (request.method === 'model/list') console.log(JSON.stringify({ id: request.id, result: {
-      data: [{ model: 'model-test', displayName: 'Test model', isDefault: true,
+      data: [{ model: provider === 'model_provider="cliproxy"' ? 'proxy-model' : 'model-test', displayName: 'Test model', isDefault: true,
         supportedReasoningEfforts: [{ reasoningEffort: 'high', description: 'High' }],
         contextWindow: 100000, maxContextWindow: 200000 }], nextCursor: null
     } }));
@@ -36,7 +41,7 @@ if (args[0] === 'app-server') {
 else if (args[0] === '--list-models') console.log('auto - Auto (default)\\nmodel-high - Model High');
 else if (args[0] === 'login' && args[1] === 'status') process.exit(process.env.TEST_LOGGED_OUT ? 1 : 0);
 else if (args[0] === 'mcp' && args[1] === 'list') console.log(JSON.stringify([
-  { name: 'robinhood-trading', enabled: true, auth_status: 'oauth',
+  { name: 'robinhood-trading', enabled: true, auth_status: process.env.TEST_MCP_LOGGED_OUT ? 'unknown' : 'oauth',
     transport: { type: 'streamable_http', url: 'https://agent.robinhood.com/mcp/trading' } }
 ]));
 else if (args[0] === 'exec') {
@@ -49,6 +54,7 @@ const env = {
   ...process.env,
   AUTO_ROB_WORKSPACE: workspace,
   AUTO_ROB_HARNESS: 'codex',
+  AUTO_ROB_CODEX_PROVIDER: '',
   CODEX_CLI_PATH: fakeCommand,
   CURSOR_AGENT_PATH: fakeCommand,
   CODEX_HOME: root,
@@ -97,6 +103,24 @@ try {
   result = await run(['--check'], { TEST_LOGGED_OUT: '1' });
   assert.equal(result.code, 1);
   assert.match(result.stderr, /Sign in to ChatGPT/);
+  const loggedOut = { TEST_LOGGED_OUT: '1' };
+  const proxy = { ...loggedOut, AUTO_ROB_CODEX_PROVIDER: 'cliproxy' };
+  result = await run(['--check', '--codex-provider', 'cliproxy'], loggedOut);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /codex provider: cliproxy/);
+  assert.equal(await access(env.TEST_ARGS_FILE).then(() => true, () => false), false);
+  result = await run(['--check', '--codex-provider', 'openai'], proxy);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /Sign in to ChatGPT/);
+  result = await run(['--check', '--codex-provider', 'missing']);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /Codex provider check for "missing"/);
+  result = await run(['--check'], { ...proxy, TEST_MCP_LOGGED_OUT: '1' });
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /Connect Robinhood/);
+  result = await run(['list', 'codex', '--json'], proxy);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).models[0].id, 'proxy-model');
   result = await run(['--thinking', 'high', '--context', '200001']);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /exceeds the limit/);
@@ -105,6 +129,11 @@ try {
   const args = JSON.parse(await readFile(env.TEST_ARGS_FILE, 'utf8'));
   assert.ok(args.includes('model_reasoning_effort="high"'));
   assert.ok(args.includes('model_context_window=100000'));
+  result = await run(['--model', 'proxy-model', '--thinking', 'high'], proxy);
+  assert.equal(result.code, 0, result.stderr);
+  const proxyArgs = JSON.parse(await readFile(env.TEST_ARGS_FILE, 'utf8'));
+  assert.ok(proxyArgs.includes('model_provider="cliproxy"'));
+  assert.ok(proxyArgs.includes('mcp_servers.robinhood-trading.required=true'));
   if (process.platform === 'linux') {
     result = await run(['list', 'codex', '--json'], { DISPLAY: '', WAYLAND_DISPLAY: '' });
     assert.equal(result.code, 0, result.stderr);
