@@ -10,6 +10,7 @@ import {
   type HarnessRunInput,
 } from "../types.js";
 import { consumeJsonLines, dim, killProcessTree } from "../util.js";
+import { codexProviderArgs } from "./app-server.js";
 import {
   codexConnectForWorkspace,
   codexStatusForWorkspace,
@@ -116,6 +117,7 @@ export function createCodexHarness(workspace: string): AgentHarness {
 
       const argv = [
         "exec",
+        ...codexProviderArgs(),
         "--json",
         "--skip-git-repo-check",
         "--sandbox",

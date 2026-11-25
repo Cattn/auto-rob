@@ -55,11 +55,21 @@ The app installs OS jobs that launch the packaged binary with `--run-once` (Wind
 
 Windows may prompt for administrator permission when installing or removing the task. For a custom cadence, copy the command shown in Settings and point your own Task Scheduler / cron / launchd entry at the app executable.
 
+### Use a Codex provider from cron
+
+Define the provider under `[model_providers.<id>]` in the Codex `config.toml` read by your scheduled user. For a Responses API proxy such as CLIProxyAPI, configure the provider URL and credentials in Codex and set `requires_openai_auth = false` if the proxy handles authentication. [Codex configuration reference](https://developers.openai.com/codex/config-reference)
+
+```sh
+auto-rob --harness codex --codex-provider cliproxy --check
+```
+
+Use the same options in your scheduled command, with `--check` removed. You can also set `AUTO_ROB_CODEX_PROVIDER=cliproxy` in the job environment. When explicitly selecting a provider, auto-rob uses Codex's reported authentication requirement and checks the saved Robinhood authorization separately. `--check` does not make a model request. Any saved auto-rob model or `--model` override must be supported by the selected provider.
+
 
 
 ## Notes
 
-This places real orders on your funded Agentic account. Review your strategy prompt in the app before enabling a schedule, and keep Robinhood connected for the active harness so unattended runs can use trading tools. Stay signed in to Cursor or Codex on this machine as well.
+This places real orders on your funded Agentic account. Review your strategy prompt in the app before enabling a schedule, and keep Robinhood connected for the active harness so unattended runs can use trading tools. Keep your harness's model credentials current on this machine.
 
 
 
